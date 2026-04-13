@@ -1,0 +1,7 @@
+results/
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+.vscode/
+.Rproj.user/

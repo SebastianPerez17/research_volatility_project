@@ -1,8 +1,11 @@
 # Rolling forecasts and forecast comparison
 
 # Validate required variables from config
-required_vars <- c("run_rolling", "window_length", "progress_every", "chosen_dist_simple", 
-                   "bonus_dir", "forecast_var_floor", "forecast_var_cap", "student_shape_min", "df", "r")
+required_vars <- c(
+  "run_rolling", "window_length", "progress_every", "chosen_dist_simple",
+  "bonus_dir", "forecast_var_floor", "forecast_var_cap", "student_shape_min", "df", "r",
+  "run_tail_risk", "tail_risk_models", "tail_risk_dist"
+)
 for (var in required_vars) {
   if (!exists(var)) {
     stop(paste0(var, " not defined. Check if previous scripts executed successfully."))
@@ -18,15 +21,19 @@ dir.create(file.path(bonus_dir, "plots"), showWarnings = FALSE, recursive = TRUE
 dir.create(file.path(bonus_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
 
 # Validate helper functions exist
-helper_funcs <- c("forecast_one_gas_bonus", "forecast_one_rugarch_bonus", "rugarch_dist_from_simple", 
-                  "norm_label", "pretty_dist_label", "qlike_loss", "mse_loss", 
-                  "paired_losses_by_date", "dm_test_1step", "safe_mean", "safe_max_num", 
-                  "safe_quantile_num", "safe_median_num", "make_variance_plot_bonus", 
-                  "save_plot_bonus", "write_log_bonus")
+helper_funcs <- c(
+  "forecast_one_gas_bonus", "forecast_one_rugarch_bonus", "rugarch_dist_from_simple",
+  "norm_label", "pretty_dist_label", "qlike_loss", "mse_loss",
+  "paired_losses_by_date", "dm_test_1step", "safe_mean", "safe_max_num",
+  "safe_quantile_num", "safe_median_num", "make_variance_plot_bonus",
+  "save_plot_bonus", "write_log_bonus"
+)
 missing_funcs <- helper_funcs[!vapply(helper_funcs, exists, logical(1), mode = "function")]
 if (length(missing_funcs) > 0) {
-  stop(paste0("Missing helper functions: ", paste(missing_funcs, collapse = ", "), 
-              ". Check if 07_comparison_helpers.R was sourced successfully."))
+  stop(paste0(
+    "Missing helper functions: ", paste(missing_funcs, collapse = ", "),
+    ". Check if 07_comparison_helpers.R was sourced successfully."
+  ))
 }
 
 # Validate that data is available
@@ -45,6 +52,9 @@ if (length(r) != nrow(df)) {
 if (!is.logical(run_rolling) || length(run_rolling) != 1 || is.na(run_rolling)) {
   stop("run_rolling must be TRUE or FALSE.")
 }
+if (!is.logical(run_tail_risk) || length(run_tail_risk) != 1 || is.na(run_tail_risk)) {
+  stop("run_tail_risk must be TRUE or FALSE.")
+}
 if (!is.numeric(window_length) || length(window_length) != 1 || !is.finite(window_length) ||
     window_length < 1 || window_length != as.integer(window_length)) {
   stop("window_length must be a single positive integer.")
@@ -60,97 +70,112 @@ chosen_dist_simple <- norm_label(as.character(chosen_dist_simple))
 if (!chosen_dist_simple %in% c("norm", "t")) {
   stop('chosen_dist_simple must be "norm" or "t".')
 }
+if (!is.character(tail_risk_dist) || length(tail_risk_dist) != 1 || is.na(tail_risk_dist)) {
+  stop("tail_risk_dist must be a single character value.")
+}
+tail_risk_dist_simple <- norm_label(as.character(tail_risk_dist))
+if (!tail_risk_dist_simple %in% c("norm", "t")) {
+  stop('tail_risk_dist must map to "norm" or "t".')
+}
+if (!is.character(tail_risk_models) || length(tail_risk_models) < 1 || any(is.na(tail_risk_models))) {
+  stop("tail_risk_models must be a non-empty character vector.")
+}
 
 if (isTRUE(run_rolling)) {
   n_total <- length(r)
-  
+
   if (window_length >= n_total) {
     stop("window_length must be strictly smaller than the number of return observations.")
   }
-  
+
   oos_index <- seq.int(from = window_length + 1L, to = n_total)
   oos_dates <- df$Date[oos_index]
-  
-  chosen_dist_rugarch <- rugarch_dist_from_simple(chosen_dist_simple)
-  chosen_dist_gas <- norm_label(chosen_dist_simple)
-  
-  # Initialize forecast container: 3 models per step (GAS, EGARCH, TGARCH)
-  forecast_rows <- vector("list", length(oos_index) * 3L)
-  row_counter <- 1L
-  
-  # Rolling window: fit on past window_length observations, forecast next return
-  for (j in seq_along(oos_index)) {
-    idx_out <- oos_index[j]
-    train_idx <- seq.int(from = idx_out - window_length, to = idx_out - 1L)
-    
-    y_train <- r[train_idx]
-    y_next <- r[idx_out]
-    date_next <- df$Date[idx_out]
-    rv_next <- y_next^2
-    
-    # Progress indicator: report at start, first, and every progress_every steps
-    if (j %% progress_every == 0L || j == 1L || j == length(oos_index)) {
-      cat("Step", j, "of", length(oos_index), "Forecast date:", as.character(date_next), "\n")
+
+  rolling_pass_bonus <- function(dist_simple, progress_prefix = "Step") {
+    dist_simple <- norm_label(dist_simple)
+    if (!dist_simple %in% c("norm", "t")) {
+      stop('rolling_pass_bonus dist_simple must be "norm" or "t".')
     }
-    
-    # Generate forecasts from each model
-    fc_gas <- forecast_one_gas_bonus(
-      y_train = y_train,
-      y_next = y_next,
-      dist_model = chosen_dist_gas
-    ) %>%
+
+    dist_rugarch <- rugarch_dist_from_simple(dist_simple)
+    dist_gas <- norm_label(dist_simple)
+
+    forecast_rows <- vector("list", length(oos_index) * 3L)
+    row_counter <- 1L
+
+    for (j in seq_along(oos_index)) {
+      idx_out <- oos_index[j]
+      train_idx <- seq.int(from = idx_out - window_length, to = idx_out - 1L)
+
+      y_train <- r[train_idx]
+      y_next <- r[idx_out]
+      date_next <- df$Date[idx_out]
+      rv_next <- y_next^2
+
+      if (j %% progress_every == 0L || j == 1L || j == length(oos_index)) {
+        cat(progress_prefix, j, "of", length(oos_index), "Forecast date:", as.character(date_next), "\n")
+      }
+
+      fc_gas <- forecast_one_gas_bonus(
+        y_train = y_train,
+        y_next = y_next,
+        dist_model = dist_gas
+      ) %>%
+        mutate(
+          Date = date_next,
+          realized_return = y_next,
+          realized_var = rv_next
+        )
+
+      fc_egarch <- forecast_one_rugarch_bonus(
+        y_train = y_train,
+        y_next = y_next,
+        variance_model = "EGARCH",
+        dist_model = dist_rugarch
+      ) %>%
+        mutate(
+          Date = date_next,
+          realized_return = y_next,
+          realized_var = rv_next
+        )
+
+      fc_tgarch <- forecast_one_rugarch_bonus(
+        y_train = y_train,
+        y_next = y_next,
+        variance_model = "TGARCH",
+        dist_model = dist_rugarch
+      ) %>%
+        mutate(
+          Date = date_next,
+          realized_return = y_next,
+          realized_var = rv_next
+        )
+
+      forecast_rows[[row_counter]] <- fc_gas
+      forecast_rows[[row_counter + 1L]] <- fc_egarch
+      forecast_rows[[row_counter + 2L]] <- fc_tgarch
+      row_counter <- row_counter + 3L
+    }
+
+    bind_rows(forecast_rows) %>%
       mutate(
-        Date = date_next,
-        realized_return = y_next,
-        realized_var = rv_next
+        distribution = pretty_dist_label(distribution),
+        forecast_valid = is.finite(variance_forecast),
+        qlike = ifelse(forecast_valid, qlike_loss(realized_var, variance_forecast), NA_real_),
+        mse = ifelse(forecast_valid, mse_loss(realized_var, variance_forecast), NA_real_)
+      ) %>%
+      select(
+        Date, model, distribution, fit_status, forecast_valid,
+        realized_return, realized_var,
+        mean_forecast, sigma_forecast, variance_forecast, shape,
+        log_score, qlike, mse
       )
-    
-    fc_egarch <- forecast_one_rugarch_bonus(
-      y_train = y_train,
-      y_next = y_next,
-      variance_model = "EGARCH",
-      dist_model = chosen_dist_rugarch
-    ) %>%
-      mutate(
-        Date = date_next,
-        realized_return = y_next,
-        realized_var = rv_next
-      )
-    
-    fc_tgarch <- forecast_one_rugarch_bonus(
-      y_train = y_train,
-      y_next = y_next,
-      variance_model = "TGARCH",
-      dist_model = chosen_dist_rugarch
-    ) %>%
-      mutate(
-        Date = date_next,
-        realized_return = y_next,
-        realized_var = rv_next
-      )
-    
-    forecast_rows[[row_counter]] <- fc_gas
-    forecast_rows[[row_counter + 1L]] <- fc_egarch
-    forecast_rows[[row_counter + 2L]] <- fc_tgarch
-    row_counter <- row_counter + 3L
   }
-  
-  rolling_long_tbl <- bind_rows(forecast_rows) %>%
-    mutate(
-      distribution = pretty_dist_label(distribution),
-      forecast_valid = is.finite(variance_forecast),
-      qlike = ifelse(forecast_valid, qlike_loss(realized_var, variance_forecast), NA_real_),
-      mse = ifelse(forecast_valid, mse_loss(realized_var, variance_forecast), NA_real_)
-    ) %>%
-    select(
-      Date, model, distribution, fit_status, forecast_valid,
-      realized_return, realized_var,
-      mean_forecast, sigma_forecast, variance_forecast, shape,
-      log_score, qlike, mse
-    )
-  
+
+  rolling_long_tbl <- rolling_pass_bonus(dist_simple = chosen_dist_simple, progress_prefix = "Step")
+
   write_csv(rolling_long_tbl, file.path(bonus_dir, "tables", "rolling_forecasts_long.csv"))
-  
+
   rolling_wide_tbl <- rolling_long_tbl %>%
     select(Date, model, realized_return, realized_var, variance_forecast, log_score, qlike, mse) %>%
     pivot_wider(
@@ -159,9 +184,9 @@ if (isTRUE(run_rolling)) {
       names_sep = "_"
     ) %>%
     arrange(Date)
-  
+
   write_csv(rolling_wide_tbl, file.path(bonus_dir, "tables", "rolling_forecasts_wide.csv"))
-  
+
   rolling_validity_tbl <- rolling_long_tbl %>%
     group_by(model, distribution) %>%
     summarise(
@@ -175,15 +200,15 @@ if (isTRUE(run_rolling)) {
       mean_valid_variance = safe_mean(variance_forecast),
       .groups = "drop"
     )
-  
+
   write_csv(rolling_validity_tbl, file.path(bonus_dir, "tables", "rolling_validity_summary.csv"))
-  
+
   rolling_invalid_tbl <- rolling_long_tbl %>%
     filter(!forecast_valid) %>%
     select(Date, model, distribution, fit_status, mean_forecast, shape)
-  
+
   write_csv(rolling_invalid_tbl, file.path(bonus_dir, "tables", "rolling_invalid_forecasts.csv"))
-  
+
   # Compute out-of-sample model performance: loss functions and rankings
   forecast_eval_tbl <- rolling_long_tbl %>%
     group_by(model, distribution) %>%
@@ -202,12 +227,12 @@ if (isTRUE(run_rolling)) {
       log_score_rank = rank(-avg_log_score, ties.method = "min", na.last = "keep")
     ) %>%
     arrange(qlike_rank, mse_rank, log_score_rank)
-  
+
   write_csv(
     forecast_eval_tbl,
     file.path(bonus_dir, "tables", "forecast_evaluation_summary.csv")
   )
-  
+
   common_valid_dates <- rolling_long_tbl %>%
     group_by(Date) %>%
     summarise(
@@ -216,7 +241,7 @@ if (isTRUE(run_rolling)) {
     ) %>%
     filter(all_models_valid) %>%
     pull(Date)
-  
+
   forecast_eval_common_tbl <- rolling_long_tbl %>%
     filter(Date %in% common_valid_dates) %>%
     group_by(model, distribution) %>%
@@ -233,17 +258,17 @@ if (isTRUE(run_rolling)) {
       log_score_rank = rank(-avg_log_score, ties.method = "min", na.last = "keep")
     ) %>%
     arrange(qlike_rank, mse_rank, log_score_rank)
-  
+
   write_csv(
     forecast_eval_common_tbl,
     file.path(bonus_dir, "tables", "forecast_evaluation_summary_common_dates.csv")
   )
-  
+
   # Diebold-Mariano tests for pairwise model comparisons on QLIKE loss
   gas_egarch_losses <- paired_losses_by_date(rolling_long_tbl, "qlike", "GAS", "EGARCH")
   gas_tgarch_losses <- paired_losses_by_date(rolling_long_tbl, "qlike", "GAS", "TGARCH")
   egarch_tgarch_losses <- paired_losses_by_date(rolling_long_tbl, "qlike", "EGARCH", "TGARCH")
-  
+
   dm_tbl <- bind_rows(
     dm_test_1step(
       loss_model_1 = gas_egarch_losses$loss_1,
@@ -264,9 +289,57 @@ if (isTRUE(run_rolling)) {
       model_2 = "TGARCH"
     )
   )
-  
+
   write_csv(dm_tbl, file.path(bonus_dir, "tables", "dm_tests_qlike.csv"))
-  
+
+  # Dedicated Student-t base forecasts for tail-risk analysis
+  if (isTRUE(run_tail_risk)) {
+    if (tail_risk_dist_simple != "t") {
+      stop('tail_risk_dist must be "t" for the tail-risk layer.')
+    }
+
+    tail_models_use <- unique(as.character(tail_risk_models))
+    tail_models_use <- tail_models_use[tail_models_use %in% c("GAS", "EGARCH", "TGARCH")]
+    if (length(tail_models_use) == 0) {
+      stop('tail_risk_models must include at least one of: "GAS", "EGARCH", "TGARCH".')
+    }
+
+    tail_risk_source_tbl <- if (chosen_dist_simple == "t") {
+      rolling_long_tbl
+    } else {
+      cat("Tail-risk pass: Student t rolling forecasts for TGARCH/GAS/EGARCH\n")
+      rolling_pass_bonus(dist_simple = "t", progress_prefix = "Tail-risk step")
+    }
+
+    tail_risk_base_tbl <- tail_risk_source_tbl %>%
+      filter(model %in% tail_models_use) %>%
+      mutate(distribution = pretty_dist_label("t")) %>%
+      select(
+        Date, model, distribution, fit_status, forecast_valid,
+        realized_return, realized_var,
+        mean_forecast, sigma_forecast, variance_forecast, shape,
+        log_score, qlike, mse
+      ) %>%
+      arrange(Date, model)
+
+    write_csv(
+      tail_risk_base_tbl,
+      file.path(bonus_dir, "tables", "tail_risk_base_forecasts_long.csv")
+    )
+
+    write_log_bonus(
+      "tail_risk_base_forecast_note.txt",
+      c(
+        "Tail-risk base forecast layer",
+        "Models: GAS, EGARCH, TGARCH",
+        "Distribution: Student t only",
+        paste0("Tail-risk models requested: ", paste(tail_models_use, collapse = ", ")),
+        paste0("Tail-risk source: ", ifelse(chosen_dist_simple == "t", "derived from rolling_forecasts_long", "dedicated Student t rolling pass")),
+        paste0("Rows exported: ", nrow(tail_risk_base_tbl))
+      )
+    )
+  }
+
   # Create variance forecast plots with realized volatility proxy
   plot_df_models <- rolling_long_tbl %>%
     transmute(
@@ -274,7 +347,7 @@ if (isTRUE(run_rolling)) {
       series = model,
       value = variance_forecast
     )
-  
+
   realized_df <- rolling_long_tbl %>%
     group_by(Date) %>%
     summarise(
@@ -282,7 +355,7 @@ if (isTRUE(run_rolling)) {
       .groups = "drop"
     ) %>%
     arrange(Date)
-  
+
   plot_df_all <- bind_rows(
     plot_df_models,
     realized_df %>%
@@ -296,7 +369,7 @@ if (isTRUE(run_rolling)) {
       series = factor(series, levels = c("EGARCH", "GAS", "TGARCH", "Proxy"))
     ) %>%
     arrange(Date)
-  
+
   # Full sample
   p_full_proxy_red <- make_variance_plot_bonus(
     plot_df = plot_df_all,
@@ -305,67 +378,67 @@ if (isTRUE(run_rolling)) {
       pretty_dist_label(chosen_dist_simple), " distribution)"
     )
   )
-  
+
   save_plot_bonus(
     p_full_proxy_red,
     "rolling_variance_forecasts_full_proxy_red.png",
     w = 11,
     h = 6
   )
-  
+
   # Recent subsample
   cutoff_date <- realized_df %>%
     summarise(cutoff = Date[ceiling(0.80 * n())]) %>%
     pull(cutoff)
-  
+
   plot_df_recent_all <- plot_df_all %>%
     filter(Date >= cutoff_date)
-  
+
   p_recent_proxy_red <- make_variance_plot_bonus(
     plot_df = plot_df_recent_all,
     title_txt = "Rolling variance forecasts: recent subsample"
   )
-  
+
   save_plot_bonus(
     p_recent_proxy_red,
     "rolling_variance_forecasts_recent_proxy_red.png",
     w = 11,
     h = 6
   )
-  
+
   # Recent subsample y <= 40
   p_recent_proxy_red_y40 <- make_variance_plot_bonus(
     plot_df = plot_df_recent_all,
     title_txt = "Rolling variance forecasts: recent subsample (y-axis up to 40)",
     ymax = 40
   )
-  
+
   save_plot_bonus(
     p_recent_proxy_red_y40,
     "rolling_variance_forecasts_recent_proxy_red_ymax40.png",
     w = 11,
     h = 6
   )
-  
+
   # Last year y <= 20
   last_year_cutoff <- max(plot_df_all$Date, na.rm = TRUE) %m-% years(1)
-  
+
   plot_df_last_year_all <- plot_df_all %>%
     filter(Date >= last_year_cutoff)
-  
+
   p_last_year_proxy_red_y20 <- make_variance_plot_bonus(
     plot_df = plot_df_last_year_all,
     title_txt = "Rolling variance forecasts: last year (y-axis up to 20)",
     ymax = 20
   )
-  
+
   save_plot_bonus(
     p_last_year_proxy_red_y20,
     "rolling_variance_forecasts_last_year_proxy_red_ymax20.png",
     w = 11,
     h = 6
   )
-  
+
   write_log_bonus(
     "forecast_design.txt",
     c(
@@ -384,10 +457,14 @@ if (isTRUE(run_rolling)) {
       "Rolling numerical-safeguard rule",
       paste0("- forecast variance floor: ", forecast_var_floor),
       paste0("- forecast variance cap: ", forecast_var_cap),
-      paste0("- minimum Student t shape: ", student_shape_min)
+      paste0("- minimum Student t shape: ", student_shape_min),
+      "",
+      "Tail-risk base layer",
+      paste0("- run_tail_risk: ", run_tail_risk),
+      paste0("- tail_risk_dist: ", pretty_dist_label(tail_risk_dist_simple))
     )
   )
-  
+
   write_log_bonus(
     "rolling_stability.txt",
     c(
@@ -400,7 +477,7 @@ if (isTRUE(run_rolling)) {
       "- evaluation tables, DM tests, and plots use only valid forecasts"
     )
   )
-  
+
   write_log_bonus(
     "rolling_forecast_note.txt",
     c(

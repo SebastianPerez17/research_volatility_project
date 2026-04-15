@@ -1,107 +1,129 @@
-# Research Volatility Project
+# A Rolling VaR and Expected Shortfall Framework Using TGARCH-t, GAS-t, and EGARCH-t
 
 ## Overview
 
-This repository provides a modular research framework for empirical analysis of financial market volatility. The application focuses on daily S&P 500 returns and compares ARCH-family and score-driven volatility models under alternative distributional assumptions. The workflow includes data preparation, exploratory analysis, in-sample model comparison, distribution selection, and out-of-sample forecast evaluation with Diebold-Mariano tests.
+This repository is a modular **market-risk / tail-risk forecasting framework** for daily S&P 500 returns.
 
-Core features:
-1. Downloads and explores daily S&P 500 return data
-2. Selects ARCH(q) specifications via residual diagnostics
-3. Estimates benchmark models (ARCH, GARCH, EGARCH, TGARCH)
-4. Estimates score-driven models (GAS) for comparison
-5. Selects optimal distribution (Normal vs Student t) across all models
-6. Generates rolling 1-step-ahead forecasts and evaluates performance
+The primary contribution is out-of-sample, 1-day-ahead **VaR** and **Expected Shortfall (ES)** forecasting and backtesting using:
+
+- **Benchmark**: `TGARCH-t`
+- **Challenger**: `GAS-t`
+- **Control**: `EGARCH-t`
+
+The core question is tail-risk credibility, not only variance fit:
+
+- Old emphasis: which model forecasts variance better?
+- New emphasis: which model provides more credible tail-risk forecasts and passes backtests?
+
+Variance forecast evaluation (QLIKE/MSE/log-score + DM tests) is preserved as supporting analysis.
 
 ## Quick Start
 
-1. Edit `scripts/00_config.R` to set parameters (data range, window size, model selection criteria)
-2. Run the pipeline:
-   ```bash
-   Rscript run_all.R
-   ```
-3. Check output directories under `results/` for generated tables and plots
+1. Edit `scripts/00_config.R` for dates and rolling settings.
+2. Confirm tail-risk settings in the same file (`run_tail_risk`, `tail_probs`, `tail_risk_models`, `tail_risk_dist`, `stress_quantile`).
+3. Run the full pipeline from project root:
 
-## Project Structure
-
-Analysis workflow scripts executed in order:
-
-- **00_config.R**: Central configuration (data range, model parameters, criteria)
-- **01_packages.R**: Load required R packages
-- **02_benchmark_helpers.R**: Output directories and utility functions
-- **03_data_download.R**: Download S&P 500 data from Yahoo Finance
-- **04_exploratory.R**: Descriptive statistics, unit root tests, baseline OLS
-- **05_arch_selection.R**: ARCH(q) selection using residual diagnostics
-- **06_benchmark_models.R**: Fit ARCH, GARCH, EGARCH, TGARCH with normal and Student t distributions
-- **07_comparison_helpers.R**: Helpers for GAS models and forecast comparison
-- **08_in_sample_candidates.R**: Fit GAS models and compare with rugarch models
-- **09_distribution_choice.R**: Choose common distribution for forecasting
-- **10_rolling_forecasts.R**: Generate 1-step-ahead rolling forecasts and forecast evaluation
-- **11_final_summary.R**: Compilation of outputs and analysis notes
-
-## Output Structure
-
-```
-results/
-├── benchmark_models/
-│   ├── tables/          # Model estimates, diagnostics, rankings
-│   ├── plots/           # Volatility paths, ACF plots, QQ plots
-│   └── logs/            # Execution notes and data summaries
-│
-└── forecast_comparison/
-    ├── tables/          # Rolling forecast evaluations, Diebold-Mariano tests
-    ├── plots/           # Rolling variance forecasts with realized proxy
-    └── logs/            # Forecast design and stability notes
-```
-
-## Key Outputs
-
-### In-Sample Analysis (Benchmark Models)
-- **results/benchmark_models/tables/model_candidates.csv**: List of 8 candidate models (ARCH/GARCH/EGARCH/TGARCH × Normal/Student t)
-- **results/benchmark_models/tables/in_sample_fit_status.csv**: Convergence status for each model
-- **results/benchmark_models/tables/in_sample_params.csv**: Parameter estimates with standard errors and t-statistics
-- **results/benchmark_models/tables/in_sample_information_criteria.csv**: AIC and BIC values for model comparison
-- **results/benchmark_models/tables/in_sample_diagnostics.csv**: Residual diagnostics (Ljung-Box, ARCH-LM p-values)
-- **results/benchmark_models/tables/in_sample_ranking_help.csv**: Model rankings by diagnostic test pass rate and AIC
-- **results/benchmark_models/tables/arch_q_selection.csv**: ARCH(q) order selection results
-
-### In-Sample Analysis (GAS Models)
-- **results/forecast_comparison/tables/model_candidates.csv**: List of 6 candidate models (GAS/EGARCH/TGARCH × Normal/Student t)
-- **results/forecast_comparison/tables/in_sample_fit_status.csv**: Convergence and usability status for GAS and rugarch models
-- **results/forecast_comparison/tables/in_sample_params.csv**: Parameter estimates for all candidate models
-- **results/forecast_comparison/tables/in_sample_information_criteria.csv**: AIC/BIC for model comparison
-- **results/forecast_comparison/tables/in_sample_diagnostics.csv**: Residual diagnostic test results
-- **results/forecast_comparison/tables/in_sample_ranking_help.csv**: Model rankings by diagnostic pass rate
-
-### Distribution Choice
-- **results/forecast_comparison/tables/distribution_choice_by_model.csv**: Per-model comparison of Normal vs Student t
-- **results/forecast_comparison/tables/distribution_choice_total_ic.csv**: Aggregate IC differences across models
-- **results/forecast_comparison/tables/distribution_choice_summary.csv**: Final distribution choice with voting summary
-
-### Rolling Forecasts & Evaluation
-- **results/forecast_comparison/tables/rolling_forecasts_long.csv**: All 1-step-ahead forecasts (long format with Date, model, variance forecast, loss metrics)
-- **results/forecast_comparison/tables/rolling_forecasts_wide.csv**: Forecasts pivoted to wide format by model
-- **results/forecast_comparison/tables/rolling_validity_summary.csv**: Forecast validity and stability by model
-- **results/forecast_comparison/tables/rolling_invalid_forecasts.csv**: Forecasts flagged as numerically unstable
-- **results/forecast_comparison/tables/forecast_evaluation_summary.csv**: Out-of-sample loss comparison and rankings
-- **results/forecast_comparison/tables/forecast_evaluation_summary_common_dates.csv**: Loss comparison on dates with all models valid
-- **results/forecast_comparison/tables/dm_tests_qlike.csv**: Diebold-Mariano pairwise test results on QLIKE loss
-
-## Configuration
-
-Edit `scripts/00_config.R` to customize:
-```r
-start_date <- as.Date("2020-01-03")     # Data start date
-end_date <- as.Date("2025-12-03")       # Data end date
-window_length <- 1000L                  # Rolling forecast window
-run_rolling <- TRUE                      # Enable rolling forecasts
-```
-
-See `scripts/00_config.R` comments for all available settings.
-
-## Workflow
-
-### Terminal
 ```bash
 Rscript run_all.R
 ```
 
+4. Inspect outputs under:
+
+- `results/benchmark_models/`
+- `results/forecast_comparison/`
+
+## Project Structure
+
+Pipeline scripts (run in order):
+
+- `scripts/00_config.R`: Central configuration (data, rolling, tail-risk settings)
+- `scripts/01_packages.R`: Package loading and install checks
+- `scripts/02_benchmark_helpers.R`: Shared benchmark utilities and output helpers
+- `scripts/03_data_download.R`: Yahoo Finance download and cleaning
+- `scripts/04_exploratory.R`: Exploratory return analysis and baseline diagnostics
+- `scripts/05_arch_selection.R`: ARCH(q) diagnostics and order choice
+- `scripts/06_benchmark_models.R`: ARCH-family benchmark estimation
+- `scripts/07_comparison_helpers.R`: GAS/rugarch helpers, rolling helpers, VaR/ES and backtest helpers
+- `scripts/08_in_sample_candidates.R`: In-sample candidate comparison (GAS, EGARCH, TGARCH)
+- `scripts/09_distribution_choice.R`: Legacy common-distribution decision for variance comparison
+- `scripts/10_rolling_forecasts.R`: Rolling variance forecasts + dedicated Student-t tail-risk base forecasts
+- `scripts/12_tail_risk_backtests.R`: VaR/ES construction, backtests, regime analysis, tail-risk plots
+- `scripts/11_final_summary.R`: Output presence/status summary log
+- `run_all.R`: Full pipeline runner
+
+## Key Outputs
+
+### Supporting Volatility Outputs
+
+- `results/forecast_comparison/tables/rolling_forecasts_long.csv`
+- `results/forecast_comparison/tables/rolling_forecasts_wide.csv`
+- `results/forecast_comparison/tables/forecast_evaluation_summary.csv`
+- `results/forecast_comparison/tables/forecast_evaluation_summary_common_dates.csv`
+- `results/forecast_comparison/tables/dm_tests_qlike.csv`
+
+### Tail-Risk Core Outputs
+
+- `results/forecast_comparison/tables/tail_risk_base_forecasts_long.csv`
+  - Dedicated Student-t rolling base for `TGARCH`, `GAS`, `EGARCH`
+- `results/forecast_comparison/tables/tail_risk_forecasts_long.csv`
+  - One row per `Date x model x alpha`, including VaR/ES/hits
+- `results/forecast_comparison/tables/tail_risk_forecasts_wide.csv`
+- `results/forecast_comparison/tables/var_es_summary.csv`
+  - Includes two dimensions per `model x alpha`: usability (`n_total_oos`, `n_valid_forecasts`, `n_invalid_forecasts`, `share_valid`) and calibration (`n_exceptions`, hit-rate metrics)
+- `results/forecast_comparison/tables/var_backtests.csv`
+  - Kupiec UC, Christoffersen independence, Christoffersen conditional coverage
+- `results/forecast_comparison/tables/es_backtests.csv`
+  - McNeil-Frey ES backtest
+- `results/forecast_comparison/tables/tail_risk_backtests_by_regime.csv`
+  - Calm vs stress comparison (stress = top 20% realized variance)
+- `results/forecast_comparison/tables/tail_risk_exceptions.csv`
+
+Backtest conditioning note:
+
+- Invalid forecasts are excluded from formal VaR/ES backtests because no meaningful VaR/ES exists on those dates.
+- Calibration outputs are therefore conditional on successful forecasts.
+- Model comparison should be read jointly through:
+  - usability: ability to deliver valid forecasts consistently
+  - calibration: ability to pass VaR/ES backtests when forecasts are available
+
+### Tail-Risk Plots
+
+Saved in `results/forecast_comparison/plots/`:
+
+- `var95_paths_recent.png`
+- `var99_paths_recent.png`
+- `var95_exceptions_timeline.png`
+- `var99_exceptions_timeline.png`
+- `tail_risk_stress_vs_calm.png`
+
+## Workflow
+
+1. Build benchmark and candidate models in-sample.
+2. Run rolling 1-day forecasts.
+3. Keep legacy variance comparison outputs for supporting evidence.
+4. Build Student-t tail-risk forecast panel for `TGARCH/GAS/EGARCH`.
+5. Compute VaR/ES at **95% and 99%** levels (`alpha = 0.05, 0.01`).
+6. Backtest VaR and ES forecasts.
+7. Compare behavior across **calm vs stressed** periods using a reproducible realized-variance rule.
+
+## Configuration
+
+Key settings in `scripts/00_config.R`:
+
+```r
+# Core dates and rolling window
+start_date <- as.Date("2020-01-03")
+end_date <- as.Date("2025-12-03")
+window_length <- 750L
+run_rolling <- TRUE
+
+# Tail-risk settings
+run_tail_risk <- TRUE
+tail_probs <- c(0.05, 0.01)   # 95% and 99% VaR/ES
+tail_risk_models <- c("TGARCH", "GAS", "EGARCH")
+tail_risk_dist <- "t"
+loss_sign_convention <- "positive_loss"
+stress_quantile <- 0.80
+```
+
+Tail-risk stage is intentionally pinned to **Student t** for `TGARCH`, `GAS`, and `EGARCH`, independent of the legacy common-distribution selection used in variance-comparison outputs.

@@ -1,7 +1,7 @@
 # Final summary
 
 # Validate required variables from config
-required_vars <- c("run_rolling", "bonus_dir")
+required_vars <- c("run_rolling", "run_tail_risk", "bonus_dir")
 for (var in required_vars) {
   if (!exists(var)) {
     stop(paste0(var, " not defined. Check if previous scripts executed successfully."))
@@ -19,6 +19,9 @@ if (!dir.exists(bonus_dir)) {
 }
 if (!is.logical(run_rolling) || length(run_rolling) != 1 || is.na(run_rolling)) {
   stop("run_rolling must be TRUE or FALSE.")
+}
+if (!is.logical(run_tail_risk) || length(run_tail_risk) != 1 || is.na(run_tail_risk)) {
+  stop("run_tail_risk must be TRUE or FALSE.")
 }
 
 output_line <- function(rel_path) {
@@ -64,8 +67,34 @@ if (isTRUE(run_rolling)) {
     "- numerically unstable forecasts flagged and excluded from loss evaluation",
     "- plots show only valid forecasts from each model"
   )
+
+  if (isTRUE(run_tail_risk)) {
+    summary_lines <- c(
+      summary_lines,
+      "",
+      "Tail-risk outputs status:",
+      output_line(file.path("tables", "tail_risk_base_forecasts_long.csv")),
+      output_line(file.path("tables", "tail_risk_forecasts_long.csv")),
+      output_line(file.path("tables", "tail_risk_forecasts_wide.csv")),
+      output_line(file.path("tables", "var_es_summary.csv")),
+      output_line(file.path("tables", "var_backtests.csv")),
+      output_line(file.path("tables", "es_backtests.csv")),
+      output_line(file.path("tables", "tail_risk_backtests_by_regime.csv")),
+      output_line(file.path("tables", "tail_risk_exceptions.csv")),
+      "",
+      "Tail-risk interpretation note:",
+      "- formal VaR/ES backtests exclude invalid forecasts (no meaningful risk measure on those dates)",
+      "- calibration results are conditional on successful forecasts only",
+      "- compare models jointly through forecast usability (share_valid) and conditional calibration"
+    )
+  } else {
+    summary_lines <- c(summary_lines, "", "Tail-risk section skipped (run_tail_risk = FALSE).")
+  }
 } else {
   summary_lines <- c(summary_lines, "", "Rolling forecast section skipped (run_rolling = FALSE).")
+  if (isTRUE(run_tail_risk)) {
+    summary_lines <- c(summary_lines, "Tail-risk section skipped because rolling forecasts were not run.")
+  }
 }
 
 # Add plot summary
@@ -87,6 +116,17 @@ if (isTRUE(run_rolling)) {
     output_line(file.path("plots", "rolling_variance_forecasts_last_year_proxy_red_ymax20.png")),
     "- Rolling plots include realized volatility proxy series"
   )
+
+  if (isTRUE(run_tail_risk)) {
+    summary_lines <- c(
+      summary_lines,
+      output_line(file.path("plots", "var95_paths_recent.png")),
+      output_line(file.path("plots", "var99_paths_recent.png")),
+      output_line(file.path("plots", "var95_exceptions_timeline.png")),
+      output_line(file.path("plots", "var99_exceptions_timeline.png")),
+      output_line(file.path("plots", "tail_risk_stress_vs_calm.png"))
+    )
+  }
 }
 
 # Write summary log

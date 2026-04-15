@@ -98,6 +98,7 @@ run_pipeline <- function() {
   source(file.path("scripts", "08_in_sample_candidates.R"), local = FALSE)
   source(file.path("scripts", "09_distribution_choice.R"), local = FALSE)
   source(file.path("scripts", "10_rolling_forecasts.R"), local = FALSE)
+  source(file.path("scripts", "12_tail_risk_backtests.R"), local = FALSE)
   source(file.path("scripts", "11_final_summary.R"), local = FALSE)
 }
 

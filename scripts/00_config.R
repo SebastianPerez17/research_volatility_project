@@ -24,6 +24,14 @@ progress_every <- 25L
 run_rolling <- TRUE
 forecast_dist_override <- NULL
 
+# Tail-risk settings ------------------------------------------------------
+run_tail_risk <- TRUE
+tail_probs <- c(0.05, 0.01)   # 95% and 99% VaR/ES
+tail_risk_models <- c("TGARCH", "GAS", "EGARCH")
+tail_risk_dist <- "t"
+loss_sign_convention <- "positive_loss"
+stress_quantile <- 0.80
+
 # GAS settings ------------------------------------------------------------
 gas_scaling <- "unit"
 require_valid_gas_hessian_for_se <- TRUE

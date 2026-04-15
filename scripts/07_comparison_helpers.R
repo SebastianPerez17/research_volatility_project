@@ -309,6 +309,447 @@ mse_loss <- function(realized_var, forecast_var) {
   (realized_var - forecast_var)^2
 }
 
+tail_alpha_label_bonus <- function(alpha) {
+  alpha_num <- as.numeric(alpha)
+  out <- rep("alpha_na", length(alpha_num))
+  ok <- is.finite(alpha_num)
+  if (any(ok)) {
+    out[ok] <- paste0("alpha_", gsub("\\.", "_", formatC(alpha_num[ok], format = "f", digits = 2)))
+  }
+  out
+}
+
+decision_note_from_p_bonus <- function(p_value, test_label = "test", level = 0.05) {
+  if (!is.finite(p_value)) return("p-value unavailable")
+  if (p_value < level) {
+    paste0("Reject ", test_label, " at ", 100 * level, "%")
+  } else {
+    paste0("Do not reject ", test_label, " at ", 100 * level, "%")
+  }
+}
+
+backtest_na_row_bonus <- function(test_name, n, n_exceptions, observed_hit_rate, note_txt) {
+  tibble(
+    test = as.character(test_name),
+    statistic = NA_real_,
+    p_value = NA_real_,
+    decision_note = as.character(note_txt),
+    n = as.integer(n),
+    n_exceptions = as.integer(n_exceptions),
+    observed_hit_rate = as.numeric(observed_hit_rate)
+  )
+}
+
+bernoulli_loglik_count_bonus <- function(successes, trials, p) {
+  successes <- as.numeric(successes)
+  trials <- as.numeric(trials)
+  p <- as.numeric(p)
+  
+  if (!is.finite(successes) || !is.finite(trials) || !is.finite(p) ||
+      successes < 0 || trials < 0 || successes > trials || p < 0 || p > 1) {
+    return(NA_real_)
+  }
+  
+  failures <- trials - successes
+  
+  if (p == 0 && successes > 0) return(-Inf)
+  if (p == 1 && failures > 0) return(-Inf)
+  
+  ll_success <- if (successes > 0) successes * log(p) else 0
+  ll_failure <- if (failures > 0) failures * log1p(-p) else 0
+  
+  as.numeric(ll_success + ll_failure)
+}
+
+compute_var_es_point_bonus <- function(mean_forecast, sigma_forecast, alpha, distribution, shape = NA_real_, loss_sign_convention = "positive_loss") {
+  if (!is.finite(alpha) || alpha <= 0 || alpha >= 1) {
+    return(list(
+      return_quantile = NA_real_,
+      VaR = NA_real_,
+      ES = NA_real_,
+      var_es_note = "Invalid alpha"
+    ))
+  }
+  
+  if (!identical(loss_sign_convention, "positive_loss")) {
+    return(list(
+      return_quantile = NA_real_,
+      VaR = NA_real_,
+      ES = NA_real_,
+      var_es_note = "Unsupported loss_sign_convention (expected positive_loss)"
+    ))
+  }
+  
+  if (!is.finite(mean_forecast) || !is.finite(sigma_forecast) || sigma_forecast <= 0) {
+    return(list(
+      return_quantile = NA_real_,
+      VaR = NA_real_,
+      ES = NA_real_,
+      var_es_note = "Invalid mean_forecast or sigma_forecast"
+    ))
+  }
+  
+  dist_simple <- norm_label(distribution)
+  
+  if (dist_simple == "norm") {
+    z_alpha <- qnorm(alpha)
+    q_ret <- mean_forecast + sigma_forecast * z_alpha
+    var_loss <- -q_ret
+    es_loss <- -mean_forecast + sigma_forecast * dnorm(z_alpha) / alpha
+  } else if (dist_simple == "t") {
+    if (!is.finite(shape) || shape <= 2) {
+      return(list(
+        return_quantile = NA_real_,
+        VaR = NA_real_,
+        ES = NA_real_,
+        var_es_note = "Invalid Student t shape (must be > 2)"
+      ))
+    }
+    
+    q_raw <- qt(alpha, df = shape)
+    t_scale <- sqrt((shape - 2) / shape)
+    q_std <- t_scale * q_raw
+    
+    q_ret <- mean_forecast + sigma_forecast * q_std
+    var_loss <- -q_ret
+    es_loss <- -mean_forecast +
+      sigma_forecast * t_scale * ((shape + q_raw^2) / (shape - 1)) * dt(q_raw, df = shape) / alpha
+  } else {
+    return(list(
+      return_quantile = NA_real_,
+      VaR = NA_real_,
+      ES = NA_real_,
+      var_es_note = paste0("Unsupported distribution: ", as.character(distribution))
+    ))
+  }
+  
+  if (!is.finite(q_ret) || !is.finite(var_loss) || !is.finite(es_loss)) {
+    return(list(
+      return_quantile = NA_real_,
+      VaR = NA_real_,
+      ES = NA_real_,
+      var_es_note = "Non-finite VaR/ES result"
+    ))
+  }
+  
+  list(
+    return_quantile = as.numeric(q_ret),
+    VaR = as.numeric(var_loss),
+    ES = as.numeric(es_loss),
+    var_es_note = NA_character_
+  )
+}
+
+compute_var_es_from_forecasts_bonus <- function(mean_forecast, sigma_forecast, alpha, distribution, shape = NA_real_, loss_sign_convention = "positive_loss") {
+  n <- length(mean_forecast)
+  if (length(sigma_forecast) != n) stop("sigma_forecast length must match mean_forecast")
+  
+  dist_vec <- rep_len(distribution, n)
+  shape_vec <- rep_len(shape, n)
+  
+  out <- vector("list", n)
+  for (i in seq_len(n)) {
+    out[[i]] <- compute_var_es_point_bonus(
+      mean_forecast = mean_forecast[i],
+      sigma_forecast = sigma_forecast[i],
+      alpha = alpha,
+      distribution = dist_vec[i],
+      shape = shape_vec[i],
+      loss_sign_convention = loss_sign_convention
+    )
+  }
+  
+  tibble(
+    return_quantile = vapply(out, function(x) as.numeric(x$return_quantile), numeric(1)),
+    VaR = vapply(out, function(x) as.numeric(x$VaR), numeric(1)),
+    ES = vapply(out, function(x) as.numeric(x$ES), numeric(1)),
+    var_es_note = vapply(out, function(x) as.character(x$var_es_note), character(1))
+  )
+}
+
+compute_hit_indicator_bonus <- function(realized_loss, var_loss) {
+  out <- ifelse(is.finite(realized_loss) & is.finite(var_loss), as.integer(realized_loss > var_loss), NA_integer_)
+  as.integer(out)
+}
+
+split_calm_stress_bonus <- function(tbl, realized_var_col = "realized_var", stress_quantile = 0.80) {
+  if (!realized_var_col %in% names(tbl)) {
+    stop(paste0("Column not found: ", realized_var_col))
+  }
+  if (!is.finite(stress_quantile) || stress_quantile <= 0 || stress_quantile >= 1) {
+    stop("stress_quantile must be in (0, 1)")
+  }
+  
+  rv <- as.numeric(tbl[[realized_var_col]])
+  rv_finite <- rv[is.finite(rv)]
+  
+  if (length(rv_finite) == 0) {
+    return(tbl %>%
+      mutate(
+        regime = NA_character_,
+        stress_threshold = NA_real_
+      ))
+  }
+  
+  thr <- as.numeric(quantile(rv_finite, probs = stress_quantile, na.rm = TRUE, names = FALSE, type = 7))
+  
+  tbl %>%
+    mutate(
+      regime = case_when(
+        is.finite(.data[[realized_var_col]]) & .data[[realized_var_col]] >= thr ~ "stress",
+        is.finite(.data[[realized_var_col]]) ~ "calm",
+        TRUE ~ NA_character_
+      ),
+      stress_threshold = thr
+    )
+}
+
+summarize_var_es_by_group_bonus <- function(tbl, group_vars = c("model", "alpha")) {
+  if (!all(group_vars %in% names(tbl))) {
+    stop("group_vars must be present in tbl")
+  }
+  has_alpha_col <- "alpha" %in% names(tbl)
+  
+  tbl %>%
+    group_by(across(all_of(group_vars))) %>%
+    summarise(
+      n_rows = n(),
+      n_valid_hits = sum(!is.na(hit)),
+      n_exceptions = sum(hit == 1, na.rm = TRUE),
+      observed_hit_rate = ifelse(n_valid_hits > 0, n_exceptions / n_valid_hits, NA_real_),
+      expected_hit_rate = if (has_alpha_col) first_num_or_na(alpha) else NA_real_,
+      avg_VaR = safe_mean(VaR),
+      avg_ES = safe_mean(ES),
+      avg_realized_loss = safe_mean(realized_loss),
+      avg_realized_loss_exceptions = safe_mean(realized_loss[hit == 1]),
+      .groups = "drop"
+    )
+}
+
+backtest_kupiec_uc_bonus <- function(hit, alpha, min_obs = 20L) {
+  h <- as.integer(hit)
+  h <- h[!is.na(h) & h %in% c(0L, 1L)]
+  
+  n <- length(h)
+  n_ex <- sum(h == 1L)
+  hit_rate <- if (n > 0) n_ex / n else NA_real_
+  
+  if (!is.finite(alpha) || alpha <= 0 || alpha >= 1) {
+    return(backtest_na_row_bonus("kupiec_uc", n, n_ex, hit_rate, "Invalid alpha"))
+  }
+  if (n < as.integer(min_obs)) {
+    return(backtest_na_row_bonus("kupiec_uc", n, n_ex, hit_rate, "Too few observations"))
+  }
+  
+  ll_null <- bernoulli_loglik_count_bonus(successes = n_ex, trials = n, p = alpha)
+  phat <- n_ex / n
+  ll_alt <- bernoulli_loglik_count_bonus(successes = n_ex, trials = n, p = phat)
+  
+  if (!is.finite(ll_null) || !is.finite(ll_alt)) {
+    return(backtest_na_row_bonus("kupiec_uc", n, n_ex, hit_rate, "Invalid likelihood in Kupiec test"))
+  }
+  
+  stat <- max(0, -2 * (ll_null - ll_alt))
+  p_val <- pchisq(stat, df = 1, lower.tail = FALSE)
+  
+  tibble(
+    test = "kupiec_uc",
+    statistic = as.numeric(stat),
+    p_value = as.numeric(p_val),
+    decision_note = decision_note_from_p_bonus(p_val, "Kupiec UC"),
+    n = as.integer(n),
+    n_exceptions = as.integer(n_ex),
+    observed_hit_rate = as.numeric(hit_rate)
+  )
+}
+
+backtest_christoffersen_independence_bonus <- function(hit, min_obs = 20L) {
+  h <- as.integer(hit)
+  h <- h[!is.na(h) & h %in% c(0L, 1L)]
+  
+  n <- length(h)
+  n_ex <- sum(h == 1L)
+  hit_rate <- if (n > 0) n_ex / n else NA_real_
+  
+  if (n < max(2L, as.integer(min_obs))) {
+    return(backtest_na_row_bonus("christoffersen_independence", n, n_ex, hit_rate, "Too few observations"))
+  }
+  
+  h_lag <- h[-n]
+  h_lead <- h[-1]
+  
+  n00 <- sum(h_lag == 0L & h_lead == 0L)
+  n01 <- sum(h_lag == 0L & h_lead == 1L)
+  n10 <- sum(h_lag == 1L & h_lead == 0L)
+  n11 <- sum(h_lag == 1L & h_lead == 1L)
+  
+  n0 <- n00 + n01
+  n1 <- n10 + n11
+  
+  if (n0 == 0 || n1 == 0) {
+    return(backtest_na_row_bonus(
+      "christoffersen_independence",
+      n, n_ex, hit_rate,
+      "Insufficient transition variation for independence test"
+    ))
+  }
+  
+  pi_hat <- (n01 + n11) / (n0 + n1)
+  pi01 <- n01 / n0
+  pi11 <- n11 / n1
+  
+  ll_null <- bernoulli_loglik_count_bonus(n01, n0, pi_hat) +
+    bernoulli_loglik_count_bonus(n11, n1, pi_hat)
+  ll_alt <- bernoulli_loglik_count_bonus(n01, n0, pi01) +
+    bernoulli_loglik_count_bonus(n11, n1, pi11)
+  
+  if (!is.finite(ll_null) || !is.finite(ll_alt)) {
+    return(backtest_na_row_bonus(
+      "christoffersen_independence",
+      n, n_ex, hit_rate,
+      "Invalid likelihood in independence test"
+    ))
+  }
+  
+  stat <- max(0, -2 * (ll_null - ll_alt))
+  p_val <- pchisq(stat, df = 1, lower.tail = FALSE)
+  
+  tibble(
+    test = "christoffersen_independence",
+    statistic = as.numeric(stat),
+    p_value = as.numeric(p_val),
+    decision_note = decision_note_from_p_bonus(p_val, "Christoffersen independence"),
+    n = as.integer(n),
+    n_exceptions = as.integer(n_ex),
+    observed_hit_rate = as.numeric(hit_rate)
+  )
+}
+
+backtest_christoffersen_cc_bonus <- function(hit, alpha, min_obs = 20L) {
+  uc_row <- backtest_kupiec_uc_bonus(hit = hit, alpha = alpha, min_obs = min_obs)
+  ind_row <- backtest_christoffersen_independence_bonus(hit = hit, min_obs = min_obs)
+  
+  n <- first_num_or_na(uc_row$n)
+  n_ex <- first_num_or_na(uc_row$n_exceptions)
+  hit_rate <- first_num_or_na(uc_row$observed_hit_rate)
+  
+  if (!is.finite(uc_row$statistic[1]) || !is.finite(ind_row$statistic[1])) {
+    return(backtest_na_row_bonus(
+      "christoffersen_conditional_coverage",
+      n = n,
+      n_exceptions = n_ex,
+      observed_hit_rate = hit_rate,
+      note_txt = "UC or independence test unavailable"
+    ))
+  }
+  
+  stat <- uc_row$statistic[1] + ind_row$statistic[1]
+  p_val <- pchisq(stat, df = 2, lower.tail = FALSE)
+  
+  tibble(
+    test = "christoffersen_conditional_coverage",
+    statistic = as.numeric(stat),
+    p_value = as.numeric(p_val),
+    decision_note = decision_note_from_p_bonus(p_val, "Christoffersen conditional coverage"),
+    n = as.integer(n),
+    n_exceptions = as.integer(n_ex),
+    observed_hit_rate = as.numeric(hit_rate)
+  )
+}
+
+backtest_es_mcneil_frey_bonus <- function(realized_loss, ES, hit, min_exceptions = 8L) {
+  keep <- is.finite(realized_loss) & is.finite(ES) & !is.na(hit)
+  rl <- as.numeric(realized_loss[keep])
+  es <- as.numeric(ES[keep])
+  h <- as.integer(hit[keep])
+  
+  n <- length(h)
+  n_ex <- sum(h == 1L, na.rm = TRUE)
+  hit_rate <- if (n > 0) n_ex / n else NA_real_
+  
+  if (n < 1L) {
+    return(backtest_na_row_bonus("mcneil_frey_es", n, n_ex, hit_rate, "No valid observations"))
+  }
+  if (n_ex < as.integer(min_exceptions)) {
+    return(backtest_na_row_bonus("mcneil_frey_es", n, n_ex, hit_rate, "Too few exceptions for ES backtest"))
+  }
+  
+  exc_resid <- rl[h == 1L] - es[h == 1L]
+  exc_resid <- exc_resid[is.finite(exc_resid)]
+  
+  if (length(exc_resid) < as.integer(min_exceptions)) {
+    return(backtest_na_row_bonus("mcneil_frey_es", n, n_ex, hit_rate, "Too few finite exceedance residuals"))
+  }
+  if (length(unique(round(exc_resid, 12))) < 2L) {
+    return(backtest_na_row_bonus("mcneil_frey_es", n, n_ex, hit_rate, "Zero residual variance in exceedance sample"))
+  }
+  
+  tt <- tryCatch(
+    t.test(exc_resid, mu = 0, alternative = "greater"),
+    error = function(e) e
+  )
+  
+  if (inherits(tt, "error")) {
+    return(backtest_na_row_bonus("mcneil_frey_es", n, n_ex, hit_rate, paste0("ES backtest error: ", tt$message)))
+  }
+  
+  stat <- as.numeric(tt$statistic)
+  p_val <- as.numeric(tt$p.value)
+  
+  tibble(
+    test = "mcneil_frey_es",
+    statistic = stat,
+    p_value = p_val,
+    decision_note = decision_note_from_p_bonus(p_val, "McNeil-Frey ES"),
+    n = as.integer(n),
+    n_exceptions = as.integer(n_ex),
+    observed_hit_rate = as.numeric(hit_rate),
+    mean_exceedance_residual = safe_mean(exc_resid)
+  )
+}
+
+run_var_backtests_group_bonus <- function(tbl, group_vars = c("model", "alpha"), min_obs = 20L) {
+  if (!all(group_vars %in% names(tbl))) stop("group_vars not found in tbl")
+  if (!all(c("hit", "alpha") %in% names(tbl))) stop("tbl must contain hit and alpha columns")
+  
+  tbl %>%
+    group_by(across(all_of(group_vars))) %>%
+    group_modify(~ {
+      alpha_use <- if ("alpha" %in% names(.y)) {
+        first_num_or_na(.y$alpha)
+      } else if ("alpha" %in% names(.x)) {
+        first_num_or_na(.x$alpha)
+      } else {
+        NA_real_
+      }
+      bind_rows(
+        backtest_kupiec_uc_bonus(hit = .x$hit, alpha = alpha_use, min_obs = min_obs),
+        backtest_christoffersen_independence_bonus(hit = .x$hit, min_obs = min_obs),
+        backtest_christoffersen_cc_bonus(hit = .x$hit, alpha = alpha_use, min_obs = min_obs)
+      )
+    }) %>%
+    ungroup()
+}
+
+run_es_backtests_group_bonus <- function(tbl, group_vars = c("model", "alpha"), min_exceptions = 8L) {
+  if (!all(group_vars %in% names(tbl))) stop("group_vars not found in tbl")
+  if (!all(c("realized_loss", "ES", "hit") %in% names(tbl))) {
+    stop("tbl must contain realized_loss, ES, and hit columns")
+  }
+  
+  tbl %>%
+    group_by(across(all_of(group_vars))) %>%
+    group_modify(~ {
+      backtest_es_mcneil_frey_bonus(
+        realized_loss = .x$realized_loss,
+        ES = .x$ES,
+        hit = .x$hit,
+        min_exceptions = min_exceptions
+      )
+    }) %>%
+    ungroup()
+}
+
 dm_test_1step <- function(loss_model_1, loss_model_2, model_1, model_2) {
   d <- loss_model_1 - loss_model_2
   d <- d[is.finite(d)]

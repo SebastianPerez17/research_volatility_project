@@ -15,7 +15,7 @@ The core question is tail-risk credibility, not only variance fit:
 - Old emphasis: which model forecasts variance better?
 - New emphasis: which model provides more credible tail-risk forecasts and passes backtests?
 
-Variance forecast evaluation (QLIKE/MSE/log-score + DM tests) is preserved as supporting analysis.
+Variance forecast evaluation (QLIKE/MSE/log-score + DM tests) is retained as supporting analysis.
 
 ## Quick Start
 
@@ -43,12 +43,12 @@ Pipeline scripts (run in order):
 - `scripts/04_exploratory.R`: Exploratory return analysis and baseline diagnostics
 - `scripts/05_arch_selection.R`: ARCH(q) diagnostics and order choice
 - `scripts/06_benchmark_models.R`: ARCH-family benchmark estimation
-- `scripts/07_comparison_helpers.R`: GAS/rugarch helpers, rolling helpers, VaR/ES and backtest helpers
+- `scripts/07_comparison_helpers.R`: GAS/rugarch, rolling-forecast, and VaR/ES backtest helpers
 - `scripts/08_in_sample_candidates.R`: In-sample candidate comparison (GAS, EGARCH, TGARCH)
 - `scripts/09_distribution_choice.R`: Legacy common-distribution decision for variance comparison
-- `scripts/10_rolling_forecasts.R`: Rolling variance forecasts + dedicated Student-t tail-risk base forecasts
-- `scripts/12_tail_risk_backtests.R`: VaR/ES construction, backtests, regime analysis, tail-risk plots
-- `scripts/11_final_summary.R`: Output presence/status summary log
+- `scripts/10_rolling_forecasts.R`: Rolling variance forecasts and dedicated Student-t tail-risk base forecasts
+- `scripts/12_tail_risk_backtests.R`: VaR/ES construction, backtests, regime analysis, and tail-risk plots
+- `scripts/11_final_summary.R`: Output presence/status summary log (runs last)
 - `run_all.R`: Full pipeline runner
 
 ## Key Outputs
@@ -64,12 +64,12 @@ Pipeline scripts (run in order):
 ### Tail-Risk Core Outputs
 
 - `results/forecast_comparison/tables/tail_risk_base_forecasts_long.csv`
-  - Dedicated Student-t rolling base for `TGARCH`, `GAS`, `EGARCH`
+  - Dedicated Student-t rolling base for `TGARCH`, `GAS`, and `EGARCH`
 - `results/forecast_comparison/tables/tail_risk_forecasts_long.csv`
   - One row per `Date x model x alpha`, including VaR/ES/hits
 - `results/forecast_comparison/tables/tail_risk_forecasts_wide.csv`
 - `results/forecast_comparison/tables/var_es_summary.csv`
-  - Includes two dimensions per `model x alpha`: usability (`n_total_oos`, `n_valid_forecasts`, `n_invalid_forecasts`, `share_valid`) and calibration (`n_exceptions`, hit-rate metrics)
+  - Per `model x alpha`: usability (`n_total_oos`, `n_valid_forecasts`, `n_invalid_forecasts`, `share_valid`) and calibration (`n_exceptions`, hit-rate metrics)
 - `results/forecast_comparison/tables/var_backtests.csv`
   - Kupiec UC, Christoffersen independence, Christoffersen conditional coverage
 - `results/forecast_comparison/tables/es_backtests.csv`
@@ -82,9 +82,7 @@ Backtest conditioning note:
 
 - Invalid forecasts are excluded from formal VaR/ES backtests because no meaningful VaR/ES exists on those dates.
 - Calibration outputs are therefore conditional on successful forecasts.
-- Model comparison should be read jointly through:
-  - usability: ability to deliver valid forecasts consistently
-  - calibration: ability to pass VaR/ES backtests when forecasts are available
+- Read model comparison jointly through usability (consistently producing valid forecasts) and calibration (passing VaR/ES backtests when forecasts are available).
 
 ### Tail-Risk Plots
 
@@ -100,8 +98,8 @@ Saved in `results/forecast_comparison/plots/`:
 
 1. Build benchmark and candidate models in-sample.
 2. Run rolling 1-day forecasts.
-3. Keep legacy variance comparison outputs for supporting evidence.
-4. Build Student-t tail-risk forecast panel for `TGARCH/GAS/EGARCH`.
+3. Generate legacy variance comparison outputs.
+4. Build Student-t tail-risk forecast panel for `TGARCH`, `GAS`, and `EGARCH`.
 5. Compute VaR/ES at **95% and 99%** levels (`alpha = 0.05, 0.01`).
 6. Backtest VaR and ES forecasts.
 7. Compare behavior across **calm vs stressed** periods using a reproducible realized-variance rule.

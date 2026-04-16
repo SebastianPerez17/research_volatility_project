@@ -267,39 +267,68 @@ Run the project from the repository root:
 
 ```bash
 Rscript run_all.R
+```
+
 The runner attempts to identify the project root robustly and then sources each script in the required order.
-Configuration
-All important empirical settings are centralized in scripts/00_config.R.
-Core data settings
+
+## Configuration
+
+All important empirical settings are centralized in `scripts/00_config.R`.
+
+### Core data settings
+
+```r
 ticker      <- "^GSPC"
 start_date  <- as.Date("2020-01-03")
 end_date    <- as.Date("2025-12-03")
 return_scale <- 100
-Benchmark-selection settings
+```
+
+### Benchmark-selection settings
+
+```r
 max_q_try <- 12
 alpha_archlm <- 0.05
 archlm_lags_check <- c(5, 10)
 ac_lag <- 20
-Rolling-forecast settings
+```
+
+### Rolling-forecast settings
+
+```r
 window_length <- 750L
 progress_every <- 25L
 run_rolling <- TRUE
 forecast_dist_override <- NULL
-Tail-risk settings
+```
+
+### Tail-risk settings
+
+```r
 run_tail_risk <- TRUE
 tail_probs <- c(0.05, 0.01)
 tail_risk_models <- c("TGARCH", "GAS", "EGARCH")
 tail_risk_dist <- "t"
 loss_sign_convention <- "positive_loss"
 stress_quantile <- 0.80
-Numerical safeguards
+```
+
+### Numerical safeguards
+
+```r
 forecast_var_floor <- 1e-12
 forecast_var_cap   <- 500
 student_shape_min  <- 2.05
 min_diag_obs_buffer <- 5L
+```
+
 The configuration file is intended to make the framework easy to adapt without editing the analytical logic in the main scripts.
-Output Structure
-The project writes results under results/.
+
+## Output Structure
+
+The project writes results under `results/`.
+
+```text
 results/
 ├── benchmark_models/
 │   ├── tables/
@@ -309,98 +338,151 @@ results/
     ├── tables/
     ├── plots/
     └── logs/
-Benchmark outputs
-The results/benchmark_models/ folder contains the benchmark estimation layer, including:
-cleaned data
-descriptive statistics
-stationarity-test logs
-ARCH-order selection outputs
-benchmark-model fit summaries
-information criteria
-diagnostic tables
-residual and volatility plots
-Forecast-comparison outputs
-The results/forecast_comparison/ folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
+```
+
+### Benchmark outputs
+
+The `results/benchmark_models/` folder contains the benchmark estimation layer, including:
+
+- cleaned data
+- descriptive statistics
+- stationarity-test logs
+- ARCH-order selection outputs
+- benchmark-model fit summaries
+- information criteria
+- diagnostic tables
+- residual and volatility plots
+
+### Forecast-comparison outputs
+
+The `results/forecast_comparison/` folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
+
 Important tables include:
-Supporting volatility outputs
-rolling_forecasts_long.csv
-rolling_forecasts_wide.csv
-rolling_validity_summary.csv
-rolling_invalid_forecasts.csv
-forecast_evaluation_summary.csv
-forecast_evaluation_summary_common_dates.csv
-dm_tests_qlike.csv
-Tail-risk core outputs
-tail_risk_base_forecasts_long.csv
-tail_risk_forecasts_long.csv
-tail_risk_forecasts_wide.csv
-var_es_summary.csv
-var_backtests.csv
-es_backtests.csv
-tail_risk_backtests_by_regime.csv
-tail_risk_exceptions.csv
-Plot outputs
+
+#### Supporting volatility outputs
+
+- `rolling_forecasts_long.csv`
+- `rolling_forecasts_wide.csv`
+- `rolling_validity_summary.csv`
+- `rolling_invalid_forecasts.csv`
+- `forecast_evaluation_summary.csv`
+- `forecast_evaluation_summary_common_dates.csv`
+- `dm_tests_qlike.csv`
+
+#### Tail-risk core outputs
+
+- `tail_risk_base_forecasts_long.csv`
+- `tail_risk_forecasts_long.csv`
+- `tail_risk_forecasts_wide.csv`
+- `var_es_summary.csv`
+- `var_backtests.csv`
+- `es_backtests.csv`
+- `tail_risk_backtests_by_regime.csv`
+- `tail_risk_exceptions.csv`
+
+### Plot outputs
+
 The project also exports plots for both the variance and tail-risk layers, including:
-rolling variance-forecast plots
-recent-subsample variance plots
-VaR path plots
-VaR exceptions timelines
-calm-vs-stress comparison plots
-Main Outputs and How to Read Them
-forecast_evaluation_summary.csv
+
+- rolling variance-forecast plots
+- recent-subsample variance plots
+- VaR path plots
+- VaR exceptions timelines
+- calm-vs-stress comparison plots
+
+## Main Outputs and How to Read Them
+
+### forecast_evaluation_summary.csv
+
 This file summarizes out-of-sample variance-forecast performance using loss functions such as QLIKE, MSE, and log-score.
+
 It is useful for comparing predictive variance performance across models, but it is not the final decision object for the project.
-forecast_evaluation_summary_common_dates.csv
+
+### forecast_evaluation_summary_common_dates.csv
+
 This file repeats the variance-forecast comparison on the subset of dates where all models delivered valid forecasts. It is useful for fairer comparison when models differ in numerical stability.
-dm_tests_qlike.csv
+
+### dm_tests_qlike.csv
+
 This file reports pairwise Diebold-Mariano tests based on QLIKE loss. It provides a formal pairwise comparison of predictive variance performance.
-var_es_summary.csv
+
+### var_es_summary.csv
+
 This is one of the central tail-risk outputs. It combines:
-forecast-usability information
-exception counts
-observed hit rates
-average VaR and ES measures
+
+- forecast-usability information
+- exception counts
+- observed hit rates
+- average VaR and ES measures
+
 It should be read together with the formal backtest tables rather than in isolation.
-var_backtests.csv
+
+### var_backtests.csv
+
 This file reports the VaR backtest results:
-Kupiec unconditional coverage
-Christoffersen independence
-Christoffersen conditional coverage
+
+- Kupiec unconditional coverage
+- Christoffersen independence
+- Christoffersen conditional coverage
+
 In short:
-Kupiec checks whether the exception frequency is consistent with the nominal VaR level
-Christoffersen independence checks whether exceptions cluster over time
-conditional coverage combines both ideas
-es_backtests.csv
+
+- Kupiec checks whether the exception frequency is consistent with the nominal VaR level
+- Christoffersen independence checks whether exceptions cluster over time
+- conditional coverage combines both ideas
+
+### es_backtests.csv
+
 This file reports the McNeil-Frey ES backtest, which evaluates whether Expected Shortfall forecasts are compatible with the realized losses observed in the exceedance region.
-tail_risk_backtests_by_regime.csv
+
+### tail_risk_backtests_by_regime.csv
+
 This file compares model behavior in calm and stress periods. It helps assess whether model performance deteriorates in volatile conditions, which is especially relevant in a market-risk context.
-Current Scope of the Project
+
+## Current Scope of the Project
+
 This repository is currently designed as a single-asset empirical framework centered on daily S&P 500 returns.
+
 Its contribution is therefore methodological and empirical within that scope:
-comparison of benchmark and score-driven volatility models
-comparison of Normal and Student-t innovation assumptions in the supporting layer
-rolling out-of-sample forecast evaluation
-dedicated Student-t VaR/ES construction and backtesting
-explicit separation between forecast usability and conditional calibration
+
+- comparison of benchmark and score-driven volatility models
+- comparison of Normal and Student-t innovation assumptions in the supporting layer
+- rolling out-of-sample forecast evaluation
+- dedicated Student-t VaR/ES construction and backtesting
+- explicit separation between forecast usability and conditional calibration
+
 The project is not presented as a universal claim about all assets or all market conditions. It is a modular framework applied to a specific asset and sample configuration, with settings that can be changed through the configuration file.
-Reproducibility Notes
-The project is intended to be run from the repository root through Rscript run_all.R.
-The package-loading step can optionally install missing packages if install_if_missing <- TRUE is kept in the configuration.
+
+## Reproducibility Notes
+
+The project is intended to be run from the repository root through `Rscript run_all.R`.
+
+The package-loading step can optionally install missing packages if `install_if_missing <- TRUE` is kept in the configuration.
+
 Because the project uses rolling re-estimation, runtime may depend materially on:
-sample length
-rolling-window length
-model set
-package versions
-system performance
-For faster testing, users can reduce the date range or rolling window in scripts/00_config.R.
-Extension Paths
+
+- sample length
+- rolling-window length
+- model set
+- package versions
+- system performance
+
+For faster testing, users can reduce the date range or rolling window in `scripts/00_config.R`.
+
+## Extension Paths
+
 Although the current repository documents the framework as it is now, it is naturally extensible. Possible future extensions include:
-applying the same pipeline to other equity indices or asset classes
-adding additional forecast windows
-introducing alternative innovation distributions
-comparing against simpler market-risk benchmarks
-expanding the backtesting section with additional scoring or comparative procedures
-Summary
+
+- applying the same pipeline to other equity indices or asset classes
+- adding additional forecast windows
+- introducing alternative innovation distributions
+- comparing against simpler market-risk benchmarks
+- expanding the backtesting section with additional scoring or comparative procedures
+
+## Summary
+
 This project provides a structured empirical framework for studying volatility and tail risk in daily financial returns.
+
 Its supporting layer compares conditional variance models through diagnostics and forecasting losses. Its main layer evaluates whether selected models produce usable and credible VaR/ES forecasts under a rolling out-of-sample design.
+
 The result is a modular workflow that is both academically interpretable and practically relevant for market-risk analysis.

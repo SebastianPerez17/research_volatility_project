@@ -3,7 +3,7 @@
 # Validate required variables from config
 required_vars <- c(
   "run_rolling", "window_length", "progress_every", "chosen_dist_simple",
-  "bonus_dir", "forecast_var_floor", "forecast_var_cap", "student_shape_min", "df", "r",
+  "forecast_dir", "forecast_var_floor", "forecast_var_cap", "student_shape_min", "df", "r",
   "run_tail_risk", "tail_risk_models", "tail_risk_dist"
 )
 for (var in required_vars) {
@@ -13,12 +13,12 @@ for (var in required_vars) {
 }
 
 # Validate output directory exists
-if (!dir.exists(bonus_dir)) {
-  stop(paste0("Output directory does not exist: ", bonus_dir))
+if (!dir.exists(forecast_dir)) {
+  stop(paste0("Output directory does not exist: ", forecast_dir))
 }
-dir.create(file.path(bonus_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
 
 # Validate helper functions exist
 helper_funcs <- c(
@@ -26,7 +26,7 @@ helper_funcs <- c(
   "norm_label", "pretty_dist_label", "qlike_loss", "mse_loss",
   "paired_losses_by_date", "dm_test_1step", "safe_mean", "safe_max_num",
   "safe_quantile_num", "safe_median_num", "make_variance_plot_bonus",
-  "save_plot_bonus", "write_log_bonus"
+  "save_plot_forecast", "write_log_forecast"
 )
 missing_funcs <- helper_funcs[!vapply(helper_funcs, exists, logical(1), mode = "function")]
 if (length(missing_funcs) > 0) {
@@ -174,7 +174,7 @@ if (isTRUE(run_rolling)) {
 
   rolling_long_tbl <- rolling_pass_bonus(dist_simple = chosen_dist_simple, progress_prefix = "Step")
 
-  write_csv(rolling_long_tbl, file.path(bonus_dir, "tables", "rolling_forecasts_long.csv"))
+  write_csv(rolling_long_tbl, file.path(forecast_dir, "tables", "rolling_forecasts_long.csv"))
 
   rolling_wide_tbl <- rolling_long_tbl %>%
     select(Date, model, realized_return, realized_var, variance_forecast, log_score, qlike, mse) %>%
@@ -185,7 +185,7 @@ if (isTRUE(run_rolling)) {
     ) %>%
     arrange(Date)
 
-  write_csv(rolling_wide_tbl, file.path(bonus_dir, "tables", "rolling_forecasts_wide.csv"))
+  write_csv(rolling_wide_tbl, file.path(forecast_dir, "tables", "rolling_forecasts_wide.csv"))
 
   rolling_validity_tbl <- rolling_long_tbl %>%
     group_by(model, distribution) %>%
@@ -201,13 +201,13 @@ if (isTRUE(run_rolling)) {
       .groups = "drop"
     )
 
-  write_csv(rolling_validity_tbl, file.path(bonus_dir, "tables", "rolling_validity_summary.csv"))
+  write_csv(rolling_validity_tbl, file.path(forecast_dir, "tables", "rolling_validity_summary.csv"))
 
   rolling_invalid_tbl <- rolling_long_tbl %>%
     filter(!forecast_valid) %>%
     select(Date, model, distribution, fit_status, mean_forecast, shape)
 
-  write_csv(rolling_invalid_tbl, file.path(bonus_dir, "tables", "rolling_invalid_forecasts.csv"))
+  write_csv(rolling_invalid_tbl, file.path(forecast_dir, "tables", "rolling_invalid_forecasts.csv"))
 
   # Compute out-of-sample model performance: loss functions and rankings
   forecast_eval_tbl <- rolling_long_tbl %>%
@@ -230,7 +230,7 @@ if (isTRUE(run_rolling)) {
 
   write_csv(
     forecast_eval_tbl,
-    file.path(bonus_dir, "tables", "forecast_evaluation_summary.csv")
+    file.path(forecast_dir, "tables", "forecast_evaluation_summary.csv")
   )
 
   common_valid_dates <- rolling_long_tbl %>%
@@ -261,7 +261,7 @@ if (isTRUE(run_rolling)) {
 
   write_csv(
     forecast_eval_common_tbl,
-    file.path(bonus_dir, "tables", "forecast_evaluation_summary_common_dates.csv")
+    file.path(forecast_dir, "tables", "forecast_evaluation_summary_common_dates.csv")
   )
 
   # Diebold-Mariano tests for pairwise model comparisons on QLIKE loss
@@ -290,7 +290,7 @@ if (isTRUE(run_rolling)) {
     )
   )
 
-  write_csv(dm_tbl, file.path(bonus_dir, "tables", "dm_tests_qlike.csv"))
+  write_csv(dm_tbl, file.path(forecast_dir, "tables", "dm_tests_qlike.csv"))
 
   # Dedicated Student-t base forecasts for tail-risk analysis
   if (isTRUE(run_tail_risk)) {
@@ -324,10 +324,10 @@ if (isTRUE(run_rolling)) {
 
     write_csv(
       tail_risk_base_tbl,
-      file.path(bonus_dir, "tables", "tail_risk_base_forecasts_long.csv")
+      file.path(forecast_dir, "tables", "tail_risk_base_forecasts_long.csv")
     )
 
-    write_log_bonus(
+    write_log_forecast(
       "tail_risk_base_forecast_note.txt",
       c(
         "Tail-risk base forecast layer",
@@ -379,7 +379,7 @@ if (isTRUE(run_rolling)) {
     )
   )
 
-  save_plot_bonus(
+  save_plot_forecast(
     p_full_proxy_red,
     "rolling_variance_forecasts_full_proxy_red.png",
     w = 11,
@@ -399,7 +399,7 @@ if (isTRUE(run_rolling)) {
     title_txt = "Rolling variance forecasts: recent subsample"
   )
 
-  save_plot_bonus(
+  save_plot_forecast(
     p_recent_proxy_red,
     "rolling_variance_forecasts_recent_proxy_red.png",
     w = 11,
@@ -413,7 +413,7 @@ if (isTRUE(run_rolling)) {
     ymax = 40
   )
 
-  save_plot_bonus(
+  save_plot_forecast(
     p_recent_proxy_red_y40,
     "rolling_variance_forecasts_recent_proxy_red_ymax40.png",
     w = 11,
@@ -432,14 +432,14 @@ if (isTRUE(run_rolling)) {
     ymax = 20
   )
 
-  save_plot_bonus(
+  save_plot_forecast(
     p_last_year_proxy_red_y20,
     "rolling_variance_forecasts_last_year_proxy_red_ymax20.png",
     w = 11,
     h = 6
   )
 
-  write_log_bonus(
+  write_log_forecast(
     "forecast_design.txt",
     c(
       "Rolling forecast design",
@@ -465,7 +465,7 @@ if (isTRUE(run_rolling)) {
     )
   )
 
-  write_log_bonus(
+  write_log_forecast(
     "rolling_stability.txt",
     c(
       "Rolling forecast validity summary",
@@ -478,7 +478,7 @@ if (isTRUE(run_rolling)) {
     )
   )
 
-  write_log_bonus(
+  write_log_forecast(
     "rolling_forecast_note.txt",
     c(
       "Rolling forecast generation note",

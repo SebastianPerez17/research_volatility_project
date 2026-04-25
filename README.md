@@ -1,4 +1,4 @@
-# A Rolling VaR and Expected Shortfall Framework Using TGARCH-t, GAS-t, and EGARCH-t
+# A Rolling VaR and Expected Shortfall Framework Using TGARCH-t, GAS-t, EGARCH-t, and Simple Risk Benchmarks
 
 ## Overview
 
@@ -11,18 +11,24 @@ The project combines two connected layers of analysis:
 
 The project is designed as a full pipeline rather than a single script. It starts from data download and preprocessing, proceeds through exploratory analysis and in-sample model comparison, and ends with rolling forecasts, VaR/ES construction, formal backtesting, and output summaries.
 
-The main modelling focus is on three Student-t specifications in the tail-risk stage:
+The main modelling focus is on three Student-t specifications in the model-based tail-risk stage:
 
 - **Benchmark**: `TGARCH-t`
 - **Challenger**: `GAS-t`
 - **Control**: `EGARCH-t`
+
+The project also compares these against simple market-risk benchmarks:
+
+- **Historical Simulation**
+- **EWMA**
+- **Filtered Historical Simulation**
 
 This design reflects the central research shift of the project:
 
 - the supporting question is: **which model forecasts conditional variance more effectively?**
 - the main question is: **which model delivers more credible tail-risk forecasts and performs better in VaR/ES backtesting?**
 
-Variance forecast evaluation remains part of the project, but it is treated as supporting evidence rather than the final objective.
+Variance forecast evaluation remains part of the project, but it is treated as supporting evidence rather than the final objective. Final conclusions are read from three separate evidence tables for operational reliability, variance/density forecast quality, and tail-risk calibration. `final_model_comparison.csv` is retained as a compact reader-facing summary, not as the sole decision object.
 
 ## Research Question
 
@@ -55,7 +61,7 @@ All core data settings are configurable in `scripts/00_config.R`, including:
 The current default configuration uses:
 
 - `ticker = "^GSPC"`
-- `start_date = as.Date("2020-01-03")`
+- `start_date = as.Date("2015-01-02")`
 - `end_date = as.Date("2025-12-03")`
 - `window_length = 750L`
 
@@ -178,6 +184,60 @@ For **ES**, the project reports:
 
 In addition, the project compares tail-risk behavior across **calm** and **stress** regimes, where stress periods are defined using a realized-variance threshold based on the upper tail of the realized-variance distribution.
 
+### 11. Simple risk benchmarks
+
+The script `13_simple_risk_benchmarks.R` adds non-GARCH market-risk benchmarks to the same evaluation framework:
+
+- **Historical Simulation VaR/ES**
+- **EWMA variance forecasts with Normal VaR/ES**
+- **Filtered Historical Simulation**, using EWMA-standardized returns and empirical quantiles
+
+These benchmarks are evaluated using the same broad outputs as the model-based tail-risk layer: forecast validity, QLIKE/MSE/log-score where applicable, VaR/ES summaries, formal VaR and ES backtests, and calm-vs-stress regime comparisons.
+
+They are included in the final component tables and in `final_model_comparison.csv` so the reader can compare the more complex TGARCH-t, GAS-t, and EGARCH-t models against simpler operational alternatives.
+
+### 12. Final model-decision tables
+
+The script `11_final_summary.R` creates three final evidence tables:
+
+- `final_operational_reliability.csv`, covering forecast counts, invalid forecasts, and share valid
+- `final_variance_density_forecast.csv`, covering QLIKE, MSE, log-score, and QLIKE Diebold-Mariano evidence
+- `final_tail_risk_calibration.csv`, covering 95% and 99% VaR hit rates, Kupiec and Christoffersen p-values, ES p-values, and stress-period hit rates
+
+These tables are the main basis for the scientific conclusion because they keep operational reliability, variance/density accuracy, and tail-risk calibration separate.
+
+The script also creates `final_model_comparison.csv`. This table is intended as a compact reader-facing summary.
+
+It reports:
+
+- model and distribution
+- share of valid forecasts
+- average QLIKE
+- average log-score
+- 95% and 99% VaR hit rates
+- Kupiec, Christoffersen, and ES backtest p-values at the 95% level
+- stress-period 95% hit rate
+- final project ranking
+
+The final rank is an average-rank summary of the available metrics. It should not be read as the main proof because it gives equal implicit weight to heterogeneous criteria and computes the average over available ranks. Missing metrics, such as unavailable log-scores for empirical benchmarks, are therefore documented in the component tables rather than hidden behind the final rank.
+
+### 13. Robustness checks
+
+The script `14_robustness_checks.R` documents and computes robustness checks for the main risk-forecasting conclusions.
+
+The robustness design covers:
+
+- rolling windows of 500, 750, and 1000 observations
+- start-date sensitivity for 2005, 2010, and 2020 designs
+- zero-mean versus constant-mean specifications
+- Normal versus Student-t distribution assumptions
+- 95% versus 99% VaR levels
+- full-sample versus common-valid-date comparisons
+
+The lightweight robustness grid is computed for the fast risk benchmarks. The full-sample versus common-valid-date check uses the existing rolling forecast outputs across the model-based and simple benchmark forecasts.
+
+Model-based TGARCH/GAS/EGARCH robustness variants for alternative windows and start dates require separate heavy rolling re-estimation runs.
+
 ## Interpretation Logic: Usability vs Calibration
 
 A central feature of the project is that model evaluation in the tail-risk stage is based on **two dimensions**, not one.
@@ -255,11 +315,22 @@ The full pipeline is executed through `run_all.R`, which sources the scripts in 
 - `scripts/12_tail_risk_backtests.R`  
   Constructs VaR and ES forecasts, computes hit indicators, runs backtests, compares calm and stress regimes, and exports tail-risk plots and tables.
 
+- `scripts/13_simple_risk_benchmarks.R`  
+  Adds Historical Simulation, EWMA, and Filtered Historical Simulation benchmarks, then evaluates them with the same forecast-loss and VaR/ES backtesting logic.
+
+- `scripts/14_robustness_checks.R`  
+  Exports robustness-check design and result tables for window length, start-date, mean-specification, distribution, VaR-level, and common-valid-date sensitivity.
+
 - `scripts/11_final_summary.R`  
-  Produces a final output-presence summary and logs the status of the main generated artifacts.
+  Produces the final model-comparison table, output-presence summary, and logs the status of the main generated artifacts.
 
 - `run_all.R`  
   Pipeline runner for the entire project.
+
+### Tests
+
+- `tests/test_var_es_formulas.R`  
+  Unit tests for Normal and Student-t VaR/ES formulas, the positive-loss sign convention, invalid Student-t shape handling, and GAS-t shape extraction behavior.
 
 ## How to Run the Project
 
@@ -271,6 +342,12 @@ Rscript run_all.R
 
 The runner attempts to identify the project root robustly and then sources each script in the required order.
 
+Run the VaR/ES unit tests separately with:
+
+```bash
+Rscript tests/test_var_es_formulas.R
+```
+
 ## Configuration
 
 All important empirical settings are centralized in `scripts/00_config.R`.
@@ -279,7 +356,7 @@ All important empirical settings are centralized in `scripts/00_config.R`.
 
 ```r
 ticker      <- "^GSPC"
-start_date  <- as.Date("2020-01-03")
+start_date  <- as.Date("2015-01-02")
 end_date    <- as.Date("2025-12-03")
 return_scale <- 100
 ```
@@ -311,6 +388,25 @@ tail_risk_models <- c("TGARCH", "GAS", "EGARCH")
 tail_risk_dist <- "t"
 loss_sign_convention <- "positive_loss"
 stress_quantile <- 0.80
+```
+
+### Simple risk benchmark settings
+
+```r
+run_simple_risk_benchmarks <- TRUE
+simple_risk_ewma_lambda <- 0.94
+run_filtered_historical_simulation <- TRUE
+```
+
+### Robustness-check settings
+
+```r
+run_robustness_checks <- TRUE
+robustness_window_lengths <- c(500L, 750L, 1000L)
+robustness_start_dates <- as.Date(c("2005-01-03", "2010-01-04", "2020-01-03"))
+robustness_mean_specs <- c("zero", "constant")
+robustness_distributions <- c("norm", "t")
+robustness_student_t_shape <- 6
 ```
 
 ### Numerical safeguards
@@ -369,6 +465,13 @@ Important tables include:
 - `forecast_evaluation_summary_common_dates.csv`
 - `dm_tests_qlike.csv`
 
+#### Final comparison output
+
+- `final_operational_reliability.csv`
+- `final_variance_density_forecast.csv`
+- `final_tail_risk_calibration.csv`
+- `final_model_comparison.csv`
+
 #### Tail-risk core outputs
 
 - `tail_risk_base_forecasts_long.csv`
@@ -379,6 +482,24 @@ Important tables include:
 - `es_backtests.csv`
 - `tail_risk_backtests_by_regime.csv`
 - `tail_risk_exceptions.csv`
+
+#### Simple risk benchmark outputs
+
+- `simple_risk_benchmark_forecasts_long.csv`
+- `simple_risk_benchmark_validity_summary.csv`
+- `simple_risk_benchmark_evaluation_summary.csv`
+- `simple_risk_benchmark_tail_forecasts_long.csv`
+- `simple_risk_benchmark_tail_forecasts_wide.csv`
+- `simple_risk_benchmark_var_es_summary.csv`
+- `simple_risk_benchmark_var_backtests.csv`
+- `simple_risk_benchmark_es_backtests.csv`
+- `simple_risk_benchmark_backtests_by_regime.csv`
+
+#### Robustness-check outputs
+
+- `robustness_check_design.csv`
+- `robustness_check_results.csv`
+- `robustness_common_valid_dates.csv`
 
 ### Plot outputs
 
@@ -405,6 +526,70 @@ This file repeats the variance-forecast comparison on the subset of dates where 
 ### dm_tests_qlike.csv
 
 This file reports pairwise Diebold-Mariano tests based on QLIKE loss. It provides a formal pairwise comparison of predictive variance performance.
+
+### final_operational_reliability.csv
+
+This final evidence table reports whether each approach is operationally usable in rolling forecasting.
+
+Columns include:
+
+- `model`
+- `distribution`
+- `number_of_forecasts`
+- `valid_forecasts`
+- `invalid_forecasts`
+- `share_valid`
+
+### final_variance_density_forecast.csv
+
+This final evidence table reports variance and density forecast quality.
+
+Columns include:
+
+- `model`
+- `distribution`
+- `avg_qlike`
+- `avg_mse`
+- `avg_log_score`
+- `dm_qlike_result`
+
+The DM column summarizes pairwise Diebold-Mariano tests on QLIKE where available. Simple benchmark models without a pairwise DM test are explicitly marked as unavailable.
+
+### final_tail_risk_calibration.csv
+
+This final evidence table reports tail-risk calibration and stress-period behavior.
+
+Columns include:
+
+- `model`
+- `distribution`
+- `VaR_95_hit_rate`
+- `VaR_99_hit_rate`
+- `Kupiec_95_p`
+- `Christoffersen_95_p`
+- `ES_95_p`
+- `stress_hit_rate_95`
+
+### final_model_comparison.csv
+
+This is a compact final-summary table. It combines the model-based Student-t forecasts and the simple risk benchmarks into one comparison.
+
+Columns include:
+
+- `model`
+- `distribution`
+- `share_valid`
+- `avg_qlike`
+- `avg_log_score`
+- `VaR_95_hit_rate`
+- `VaR_99_hit_rate`
+- `Kupiec_95_p`
+- `Christoffersen_95_p`
+- `ES_95_p`
+- `stress_hit_rate_95`
+- `final_rank`
+
+The table is designed to make the project conclusion easy to scan. It should be read after the three component tables because the final rank averages heterogeneous metrics and does not impose a scientifically justified weighting scheme.
 
 ### var_es_summary.csv
 
@@ -439,6 +624,26 @@ This file reports the McNeil-Frey ES backtest, which evaluates whether Expected 
 
 This file compares model behavior in calm and stress periods. It helps assess whether model performance deteriorates in volatile conditions, which is especially relevant in a market-risk context.
 
+### simple_risk_benchmark_* files
+
+These files report the same kind of forecast and tail-risk evidence for Historical Simulation, EWMA, and Filtered Historical Simulation. They provide simple operational baselines for judging whether the more complex TGARCH-t, GAS-t, and EGARCH-t specifications add practical value.
+
+### robustness_check_results.csv
+
+This file reports robustness checks across:
+
+- window length
+- start-date design
+- mean specification
+- distribution assumption
+- VaR level
+
+Rows that cannot be computed from the currently loaded data are flagged as unavailable. For example, if the cleaned dataset starts in 2015, checks requesting a 2005 or 2010 start require rerunning the project with earlier data.
+
+### robustness_common_valid_dates.csv
+
+This file compares full-sample results against the subset of dates where all included forecasts are valid. It is intended to reveal whether numerical failures materially affect the comparison.
+
 ## Current Scope of the Project
 
 This repository is currently designed as a single-asset empirical framework centered on daily S&P 500 returns.
@@ -449,6 +654,9 @@ Its contribution is therefore methodological and empirical within that scope:
 - comparison of Normal and Student-t innovation assumptions in the supporting layer
 - rolling out-of-sample forecast evaluation
 - dedicated Student-t VaR/ES construction and backtesting
+- direct comparison against Historical Simulation, EWMA, and Filtered Historical Simulation
+- final model evidence through the three component final tables, with `final_model_comparison.csv` retained as a compact summary
+- robustness checks for window length, start-date design, mean specification, distribution choice, VaR level, and common-valid-date bias
 - explicit separation between forecast usability and conditional calibration
 
 The project is not presented as a universal claim about all assets or all market conditions. It is a modular framework applied to a specific asset and sample configuration, with settings that can be changed through the configuration file.
@@ -474,15 +682,14 @@ For faster testing, users can reduce the date range or rolling window in `script
 Although the current repository documents the framework as it is now, it is naturally extensible. Possible future extensions include:
 
 - applying the same pipeline to other equity indices or asset classes
-- adding additional forecast windows
 - introducing alternative innovation distributions
-- comparing against simpler market-risk benchmarks
 - expanding the backtesting section with additional scoring or comparative procedures
+- running full model-based robustness reruns for alternative windows and longer historical samples
 
 ## Summary
 
 This project provides a structured empirical framework for studying volatility and tail risk in daily financial returns.
 
-Its supporting layer compares conditional variance models through diagnostics and forecasting losses. Its main layer evaluates whether selected models produce usable and credible VaR/ES forecasts under a rolling out-of-sample design.
+Its supporting layer compares conditional variance models through diagnostics and forecasting losses. Its main layer evaluates whether selected models and simple benchmarks produce usable and credible VaR/ES forecasts under a rolling out-of-sample design.
 
 The result is a modular workflow that is both academically interpretable and practically relevant for market-risk analysis.

@@ -3,14 +3,14 @@
 
 # Core data settings ------------------------------------------------------
 ticker      <- "^GSPC"
-start_date  <- as.Date("2020-01-03")
+start_date  <- as.Date("2015-01-02")
 end_date    <- as.Date("2025-12-03")
 return_scale <- 100
 
 # Unified output structure ------------------------------------------------
 results_root <- file.path("results")
 benchmark_output_dir <- file.path(results_root, "benchmark_models")
-bonus_subdir <- "forecast_comparison"
+forecast_subdir <- "forecast_comparison"
 
 # ARCH(q) selection -------------------------------------------------------
 max_q_try <- 12
@@ -31,6 +31,19 @@ tail_risk_models <- c("TGARCH", "GAS", "EGARCH")
 tail_risk_dist <- "t"
 loss_sign_convention <- "positive_loss"
 stress_quantile <- 0.80
+
+# Simple risk benchmark settings -----------------------------------------
+run_simple_risk_benchmarks <- TRUE
+simple_risk_ewma_lambda <- 0.94
+run_filtered_historical_simulation <- TRUE
+
+# Robustness check settings -----------------------------------------------
+run_robustness_checks <- TRUE
+robustness_window_lengths <- c(500L, 750L, 1000L)
+robustness_start_dates <- as.Date(c("2005-01-03", "2010-01-04", "2020-01-03"))
+robustness_mean_specs <- c("zero", "constant")
+robustness_distributions <- c("norm", "t")
+robustness_student_t_shape <- 6
 
 # GAS settings ------------------------------------------------------------
 gas_scaling <- "unit"

@@ -1,7 +1,7 @@
 # Distribution choice
 
 # Validate required variables from config
-required_vars <- c("insample_ic_tbl", "forecast_dist_override", "bonus_dir")
+required_vars <- c("insample_ic_tbl", "forecast_dist_override", "forecast_dir")
 for (var in required_vars) {
   if (!exists(var)) {
     stop(paste0(var, " not defined. Check if previous scripts executed successfully."))
@@ -9,12 +9,12 @@ for (var in required_vars) {
 }
 
 # Validate output directory exists
-if (!dir.exists(bonus_dir)) {
-  stop(paste0("Output directory does not exist: ", bonus_dir))
+if (!dir.exists(forecast_dir)) {
+  stop(paste0("Output directory does not exist: ", forecast_dir))
 }
 
 # Validate helper functions exist
-helper_funcs <- c("norm_label", "best_dist_by_ic", "first_num_or_na", "pretty_dist_label", "write_log_bonus")
+helper_funcs <- c("norm_label", "best_dist_by_ic", "first_num_or_na", "pretty_dist_label", "write_log_forecast")
 missing_funcs <- helper_funcs[!vapply(helper_funcs, exists, logical(1), mode = "function")]
 if (length(missing_funcs) > 0) {
   stop(paste0("Missing helper functions: ", paste(missing_funcs, collapse = ", "), 
@@ -156,11 +156,11 @@ dist_choice_summary_tbl <- tibble(
   tie_break_total_dBIC_t_minus_norm = total_ic_tbl$total_dBIC_t_minus_norm
 )
 
-write_csv(dist_choice_tbl, file.path(bonus_dir, "tables", "distribution_choice_by_model.csv"))
-write_csv(total_ic_tbl, file.path(bonus_dir, "tables", "distribution_choice_total_ic.csv"))
-write_csv(dist_choice_summary_tbl, file.path(bonus_dir, "tables", "distribution_choice_summary.csv"))
+write_csv(dist_choice_tbl, file.path(forecast_dir, "tables", "distribution_choice_by_model.csv"))
+write_csv(total_ic_tbl, file.path(forecast_dir, "tables", "distribution_choice_total_ic.csv"))
+write_csv(dist_choice_summary_tbl, file.path(forecast_dir, "tables", "distribution_choice_summary.csv"))
 
-write_log_bonus(
+write_log_forecast(
   "distribution_choice.txt",
   c(
     "Distribution choice rule:",

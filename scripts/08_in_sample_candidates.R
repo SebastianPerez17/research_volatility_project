@@ -1,7 +1,7 @@
 # In-sample score-driven and benchmark comparison
 
 # Validate required variables from config
-required_vars <- c("bonus_dir", "ac_lag", "archlm_lags_check", "alpha_archlm", "df", "r")
+required_vars <- c("forecast_dir", "ac_lag", "archlm_lags_check", "alpha_archlm", "df", "r")
 for (var in required_vars) {
   if (!exists(var)) {
     stop(paste0(var, " not defined. Check if previous scripts executed successfully."))
@@ -9,8 +9,8 @@ for (var in required_vars) {
 }
 
 # Validate output directory exists
-if (!dir.exists(bonus_dir)) {
-  stop(paste0("Output directory does not exist: ", bonus_dir))
+if (!dir.exists(forecast_dir)) {
+  stop(paste0("Output directory does not exist: ", forecast_dir))
 }
 
 # Validate data consistency
@@ -68,7 +68,7 @@ bonus_candidates <- tribble(
   "TGARCH", "std"
 )
 
-write_csv(bonus_candidates, file.path(bonus_dir, "tables", "model_candidates.csv"))
+write_csv(bonus_candidates, file.path(forecast_dir, "tables", "model_candidates.csv"))
 
 # Initialize result containers
 insample_status <- list()
@@ -124,10 +124,10 @@ insample_params_tbl <- bind_rows(insample_params)
 insample_ic_tbl <- bind_rows(insample_ic)
 insample_diag_tbl <- bind_rows(insample_diag)
 
-write_csv(insample_status_tbl, file.path(bonus_dir, "tables", "in_sample_fit_status.csv"))
-write_csv(insample_params_tbl, file.path(bonus_dir, "tables", "in_sample_params.csv"))
-write_csv(insample_ic_tbl, file.path(bonus_dir, "tables", "in_sample_information_criteria.csv"))
-write_csv(insample_diag_tbl, file.path(bonus_dir, "tables", "in_sample_diagnostics.csv"))
+write_csv(insample_status_tbl, file.path(forecast_dir, "tables", "in_sample_fit_status.csv"))
+write_csv(insample_params_tbl, file.path(forecast_dir, "tables", "in_sample_params.csv"))
+write_csv(insample_ic_tbl, file.path(forecast_dir, "tables", "in_sample_information_criteria.csv"))
+write_csv(insample_diag_tbl, file.path(forecast_dir, "tables", "in_sample_diagnostics.csv"))
 
 required_diag_cols <- c("lb_resid_p", "lb_resid2_p", archlm_col_1, archlm_col_2)
 missing_diag_cols <- setdiff(required_diag_cols, names(insample_diag_tbl))
@@ -162,4 +162,4 @@ insample_rank_tbl <- insample_diag_tbl %>%
   ) %>%
   arrange(desc(pass_sum), AIC_total)
 
-write_csv(insample_rank_tbl, file.path(bonus_dir, "tables", "in_sample_ranking_help.csv"))
+write_csv(insample_rank_tbl, file.path(forecast_dir, "tables", "in_sample_ranking_help.csv"))

@@ -3,7 +3,7 @@
 # Validate required variables from config
 required_vars <- c(
   "run_rolling", "run_tail_risk", "tail_probs", "tail_risk_models", "tail_risk_dist",
-  "loss_sign_convention", "stress_quantile", "bonus_dir"
+  "loss_sign_convention", "stress_quantile", "forecast_dir"
 )
 for (var in required_vars) {
   if (!exists(var)) {
@@ -12,16 +12,16 @@ for (var in required_vars) {
 }
 
 # Validate output directory exists
-if (!dir.exists(bonus_dir)) {
-  stop(paste0("Output directory does not exist: ", bonus_dir))
+if (!dir.exists(forecast_dir)) {
+  stop(paste0("Output directory does not exist: ", forecast_dir))
 }
-dir.create(file.path(bonus_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
 
 # Validate helper functions exist
 helper_funcs <- c(
-  "norm_label", "pretty_dist_label", "write_log_bonus", "save_plot_bonus",
+  "norm_label", "pretty_dist_label", "write_log_forecast", "save_plot_forecast",
   "tail_alpha_label_bonus", "compute_var_es_from_forecasts_bonus", "compute_hit_indicator_bonus",
   "summarize_var_es_by_group_bonus", "run_var_backtests_group_bonus", "run_es_backtests_group_bonus",
   "split_calm_stress_bonus", "safe_mean"
@@ -42,12 +42,12 @@ if (!is.logical(run_tail_risk) || length(run_tail_risk) != 1 || is.na(run_tail_r
 }
 
 if (!isTRUE(run_rolling)) {
-  write_log_bonus(
+  write_log_forecast(
     "tail_risk_backtests.txt",
     c("Tail-risk stage skipped: run_rolling = FALSE")
   )
 } else if (!isTRUE(run_tail_risk)) {
-  write_log_bonus(
+  write_log_forecast(
     "tail_risk_backtests.txt",
     c("Tail-risk stage skipped: run_tail_risk = FALSE")
   )
@@ -80,8 +80,8 @@ if (!isTRUE(run_rolling)) {
     stop("stress_quantile must be a scalar in (0, 1).")
   }
 
-  tables_dir <- file.path(bonus_dir, "tables")
-  plots_dir <- file.path(bonus_dir, "plots")
+  tables_dir <- file.path(forecast_dir, "tables")
+  plots_dir <- file.path(forecast_dir, "plots")
 
   base_path <- file.path(tables_dir, "tail_risk_base_forecasts_long.csv")
   if (!file.exists(base_path)) {
@@ -388,7 +388,7 @@ if (!isTRUE(run_rolling)) {
       scale_x_date(date_breaks = "6 months", date_labels = "%Y-%m") +
       theme_minimal()
 
-    save_plot_bonus(p, file_name, w = 11, h = 7)
+    save_plot_forecast(p, file_name, w = 11, h = 7)
   }
 
   make_exceptions_timeline_plot <- function(df, alpha_use, title_txt, file_name) {
@@ -406,7 +406,7 @@ if (!isTRUE(run_rolling)) {
       scale_x_date(date_breaks = "6 months", date_labels = "%Y-%m") +
       theme_minimal()
 
-    save_plot_bonus(p, file_name, w = 11, h = 5)
+    save_plot_forecast(p, file_name, w = 11, h = 5)
   }
 
   make_var_path_plot(
@@ -464,13 +464,13 @@ if (!isTRUE(run_rolling)) {
     ) +
     theme_minimal()
 
-  save_plot_bonus(p_stress_calm, "tail_risk_stress_vs_calm.png", w = 10, h = 5)
+  save_plot_forecast(p_stress_calm, "tail_risk_stress_vs_calm.png", w = 10, h = 5)
 
   stress_threshold_value <- regime_lookup %>%
     summarise(threshold = first(stress_threshold)) %>%
     pull(threshold)
 
-  write_log_bonus(
+  write_log_forecast(
     "tail_risk_backtests.txt",
     c(
       "Tail-risk backtesting completed.",

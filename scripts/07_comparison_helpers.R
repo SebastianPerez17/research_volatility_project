@@ -2,7 +2,7 @@
 
 # Validate required variables from config
 required_vars <- c(
-  "results_root", "bonus_subdir", "forecast_dist_override", "install_if_missing",
+  "results_root", "forecast_subdir", "forecast_dist_override", "install_if_missing",
   "req_pkgs_bonus", "window_length", "run_rolling", "forecast_var_floor",
   "forecast_var_cap", "student_shape_min", "min_diag_obs_buffer",
   "gas_scaling", "require_valid_gas_hessian_for_se", "archlm_lags_check"
@@ -119,21 +119,21 @@ if (!is.null(gas_scaling_check_fn)) {
 
 # Create output directory structure
 
-bonus_dir <- file.path(output_dir, bonus_subdir)
-dir.create(bonus_dir, showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(bonus_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
+forecast_dir <- file.path(output_dir, forecast_subdir)
+dir.create(forecast_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "plots"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "tables"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(forecast_dir, "logs"), showWarnings = FALSE, recursive = TRUE)
 
-# Log writer for bonus analysis
-write_log_bonus <- function(filename, lines) {
-  writeLines(as.character(lines), con = file.path(bonus_dir, "logs", filename))
+# Log writer for forecast analysis
+write_log_forecast <- function(filename, lines) {
+  writeLines(as.character(lines), con = file.path(forecast_dir, "logs", filename))
 }
 
-# Plot saver for bonus analysis
-save_plot_bonus <- function(p, filename, w = 10, h = 6) {
+# Plot saver for forecast analysis
+save_plot_forecast <- function(p, filename, w = 10, h = 6) {
   ggsave(
-    filename = file.path(bonus_dir, "plots", filename),
+    filename = file.path(forecast_dir, "plots", filename),
     plot = p,
     width = w,
     height = h,
@@ -205,7 +205,7 @@ if (nrow(df) <= window_length + 5L && isTRUE(run_rolling)) {
   stop("Not enough observations for the requested rolling window.")
 }
 
-write_log_bonus(
+write_log_forecast(
   "bonus_data_info.txt",
   c(
     paste0("Ticker: ", ticker),
@@ -813,7 +813,7 @@ paired_losses_by_date <- function(rolling_tbl, loss_col, model_1, model_2) {
 }
 
 save_acf_png <- function(x, main, filename, lag = 20) {
-  png(file.path(bonus_dir, "plots", filename), width = 1200, height = 800)
+  png(file.path(forecast_dir, "plots", filename), width = 1200, height = 800)
   on.exit(dev.off(), add = TRUE)
   acf(x, main = main, lag.max = lag)
 }
@@ -841,7 +841,7 @@ save_qq_plot_assumed <- function(z, dist_label, shape = NA_real_, main, filename
     labs(title = main, x = xlab_txt, y = "Sample quantiles") +
     theme_minimal()
   
-  save_plot_bonus(p_qq, filename, w = 8, h = 6)
+  save_plot_forecast(p_qq, filename, w = 8, h = 6)
   invisible(NULL)
 }
 
@@ -1141,7 +1141,7 @@ save_rugarch_plots_bonus <- function(fit, key, model_name, dist_name, dates, lag
       ) +
       theme_minimal()
     
-    save_plot_bonus(p_vol, paste0("volatility_", safe_name_bonus(key), ".png"))
+    save_plot_forecast(p_vol, paste0("volatility_", safe_name_bonus(key), ".png"))
   }
   
   z <- tryCatch(as.numeric(residuals(fit, standardize = TRUE)), error = function(e) NULL)
@@ -1652,7 +1652,7 @@ save_gas_plots_bonus <- function(fit, key, model_name, dist_name, dates, lag = 2
       ) +
       theme_minimal()
     
-    save_plot_bonus(p_vol, paste0("volatility_", safe_name_bonus(key), ".png"))
+    save_plot_forecast(p_vol, paste0("volatility_", safe_name_bonus(key), ".png"))
   }
   
   z <- get_gas_standardized_resid_bonus(fit)

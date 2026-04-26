@@ -364,7 +364,7 @@ return_scale <- 100
 ### Output-protection settings
 
 ```r
-results_root <- file.path("results", "final_runs", "sp500_2005_2025_w750")
+results_root <- file.path("results", "sp500_2005_2025_w750")
 allow_overwrite_final_run <- FALSE
 ```
 
@@ -431,25 +431,24 @@ The configuration file is intended to make the framework easy to adapt without e
 
 ## Output Structure
 
-The current final-run configuration writes results under `results/final_runs/sp500_2005_2025_w750/`.
+The current final-run configuration writes results under `results/sp500_2005_2025_w750/`.
 
 ```text
 results/
-└── final_runs/
-    └── sp500_2005_2025_w750/
-        ├── benchmark_models/
-        │   ├── tables/
-        │   ├── plots/
-        │   └── logs/
-        └── forecast_comparison/
-            ├── tables/
-            ├── plots/
-            └── logs/
+└── sp500_2005_2025_w750/
+    ├── benchmark_models/
+    │   ├── tables/
+    │   ├── plots/
+    │   └── logs/
+    └── forecast_comparison/
+        ├── tables/
+        ├── plots/
+        └── logs/
 ```
 
 ### Benchmark outputs
 
-The `results/final_runs/sp500_2005_2025_w750/benchmark_models/` folder contains the benchmark estimation layer, including:
+The `results/sp500_2005_2025_w750/benchmark_models/` folder contains the benchmark estimation layer, including:
 
 - cleaned data
 - descriptive statistics
@@ -462,7 +461,7 @@ The `results/final_runs/sp500_2005_2025_w750/benchmark_models/` folder contains 
 
 ### Forecast-comparison outputs
 
-The `results/final_runs/sp500_2005_2025_w750/forecast_comparison/` folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
+The `results/sp500_2005_2025_w750/forecast_comparison/` folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
 
 Important tables include:
 

@@ -8,7 +8,7 @@ end_date    <- as.Date("2025-12-03")
 return_scale <- 100
 
 # Unified output structure ------------------------------------------------
-results_root <- file.path("results", "final_runs", "sp500_2005_2025_w750")
+results_root <- file.path("results", "sp500_2005_2025_w750")
 benchmark_output_dir <- file.path(results_root, "benchmark_models")
 forecast_subdir <- "forecast_comparison"
 allow_overwrite_final_run <- FALSE

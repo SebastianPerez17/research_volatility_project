@@ -3,14 +3,15 @@
 
 # Core data settings ------------------------------------------------------
 ticker      <- "^GSPC"
-start_date  <- as.Date("2015-01-02")
+start_date  <- as.Date("2005-01-03")
 end_date    <- as.Date("2025-12-03")
 return_scale <- 100
 
 # Unified output structure ------------------------------------------------
-results_root <- file.path("results")
+results_root <- file.path("results", "final_runs", "sp500_2005_2025_w750")
 benchmark_output_dir <- file.path(results_root, "benchmark_models")
 forecast_subdir <- "forecast_comparison"
+allow_overwrite_final_run <- FALSE
 
 # ARCH(q) selection -------------------------------------------------------
 max_q_try <- 12

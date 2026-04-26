@@ -88,6 +88,16 @@ run_pipeline <- function() {
 
   # Pipeline stages:
   source(file.path("scripts", "00_config.R"), local = FALSE)
+  if (exists("allow_overwrite_final_run") && !isTRUE(allow_overwrite_final_run) &&
+      exists("results_root") && dir.exists(results_root)) {
+    existing_outputs <- list.files(results_root, all.files = TRUE, no.. = TRUE, recursive = TRUE)
+    if (length(existing_outputs) > 0L) {
+      stop(paste0(
+        "Refusing to overwrite existing final-run outputs in ", results_root,
+        ". Set allow_overwrite_final_run <- TRUE in scripts/00_config.R only after archiving or intentionally replacing them."
+      ))
+    }
+  }
   source(file.path("scripts", "01_packages.R"), local = FALSE)
   source(file.path("scripts", "02_benchmark_helpers.R"), local = FALSE)
   source(file.path("scripts", "03_data_download.R"), local = FALSE)

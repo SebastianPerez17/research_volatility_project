@@ -61,7 +61,7 @@ All core data settings are configurable in `scripts/00_config.R`, including:
 The current default configuration uses:
 
 - `ticker = "^GSPC"`
-- `start_date = as.Date("2015-01-02")`
+- `start_date = as.Date("2005-01-03")`
 - `end_date = as.Date("2025-12-03")`
 - `window_length = 750L`
 
@@ -356,10 +356,19 @@ All important empirical settings are centralized in `scripts/00_config.R`.
 
 ```r
 ticker      <- "^GSPC"
-start_date  <- as.Date("2015-01-02")
+start_date  <- as.Date("2005-01-03")
 end_date    <- as.Date("2025-12-03")
 return_scale <- 100
 ```
+
+### Output-protection settings
+
+```r
+results_root <- file.path("results", "final_runs", "sp500_2005_2025_w750")
+allow_overwrite_final_run <- FALSE
+```
+
+With `allow_overwrite_final_run <- FALSE`, `run_all.R` refuses to run if the configured final-run directory already contains files. Set it to `TRUE` only when intentionally replacing an archived run.
 
 ### Benchmark-selection settings
 
@@ -422,23 +431,25 @@ The configuration file is intended to make the framework easy to adapt without e
 
 ## Output Structure
 
-The project writes results under `results/`.
+The current final-run configuration writes results under `results/final_runs/sp500_2005_2025_w750/`.
 
 ```text
 results/
-├── benchmark_models/
-│   ├── tables/
-│   ├── plots/
-│   └── logs/
-└── forecast_comparison/
-    ├── tables/
-    ├── plots/
-    └── logs/
+└── final_runs/
+    └── sp500_2005_2025_w750/
+        ├── benchmark_models/
+        │   ├── tables/
+        │   ├── plots/
+        │   └── logs/
+        └── forecast_comparison/
+            ├── tables/
+            ├── plots/
+            └── logs/
 ```
 
 ### Benchmark outputs
 
-The `results/benchmark_models/` folder contains the benchmark estimation layer, including:
+The `results/final_runs/sp500_2005_2025_w750/benchmark_models/` folder contains the benchmark estimation layer, including:
 
 - cleaned data
 - descriptive statistics
@@ -451,7 +462,7 @@ The `results/benchmark_models/` folder contains the benchmark estimation layer, 
 
 ### Forecast-comparison outputs
 
-The `results/forecast_comparison/` folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
+The `results/final_runs/sp500_2005_2025_w750/forecast_comparison/` folder contains the candidate-comparison, rolling-forecast, and tail-risk outputs.
 
 Important tables include:
 
